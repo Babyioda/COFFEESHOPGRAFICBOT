@@ -120,8 +120,9 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
     roles: [
       'су-шеф', 'шеф-повар', 'шеф', 'повар', 'помощник повара',
       'посудомойщик', 'кухонный работник', 'кухня',
-      'тех.персонал', 'тех. персонал', 'техперсонал', 'технический персонал',
-      'уборщик', 'уборщица', 'клинер',
+      'тех.персонал', 'тех. персонал', 'тех.перс', 'тех. перс', 'техперс',
+      'техперсонал', 'технический персонал', 'тех перс', 'тех.перс.',
+      'уборщик', 'уборщица', 'клинер', 'мойщик', 'мойщица',
     ],
   },
 };
@@ -153,6 +154,11 @@ export function getDepartment(role: string): Department | null {
     }
   }
 
+  // 3. Специальные паттерны через includes (для сокращений вроде "тех.перс")
+  if (normalized.startsWith('тех') || normalized.includes('техн') || normalized.includes('уборщ') || normalized.includes('клинер') || normalized.includes('мойщ')) {
+    return 'kitchen';
+  }
+
   return null;
 }
 
@@ -171,7 +177,6 @@ export interface ShiftEntry {
   date: string;       // ISO yyyy-mm-dd
   shift: ShiftType;
   role?: string;      // должность на конкретный день (если отличается от основной)
-  note?: string;
 }
 
 export interface ScheduleData {

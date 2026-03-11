@@ -97,7 +97,7 @@ const DayCard: React.FC<DayCardProps> = ({ data, date, isToday }) => {
     power: [], bar: [], hall: [], kitchen: [],
   };
   day.working.forEach(w => {
-    const d = w.department ?? 'hall';
+    const d = w.department ?? 'kitchen';
     byDept[d].push(w);
   });
 

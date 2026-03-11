@@ -99,7 +99,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
   });
 
   const byDept: Record<Department, typeof working> = { power: [], bar: [], hall: [], kitchen: [] };
-  working.forEach(w => { byDept[w.dept ?? 'hall'].push(w); });
+  working.forEach(w => { byDept[w.dept ?? 'kitchen'].push(w); });
 
   type ByShift = Partial<Record<ShiftType, typeof working>>;
   const groupByShift = (list: typeof working): ByShift => {

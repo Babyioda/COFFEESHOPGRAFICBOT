@@ -6,7 +6,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
+const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 const SHIFT_TIMES: Record<ShiftType, { start: string; end: string } | null> = {
   daily: { start: '08:00', end: '08:00' },
@@ -15,12 +15,15 @@ const SHIFT_TIMES: Record<ShiftType, { start: string; end: string } | null> = {
   off: null, vacation: null, sick: null,
 };
 
-const SHIFT_HOURS: Record<ShiftType, number> = {
-  daily: 24, day: 12, night: 12, off: 0, vacation: 0, sick: 0,
-};
-
 function formatDate(y: number, m: number, d: number) {
   return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+// Цвет отдела по должности на конкретный день
+function getDeptColor(role: string, fallback: string): string {
+  const dept = getDepartment(role);
+  if (dept) return DEPARTMENT_CONFIG[dept].color;
+  return fallback;
 }
 
 interface EmployeeCardProps {
@@ -41,7 +44,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const [cardMonth, setCardMonth] = useState(month);
   const [cardYear, setCardYear]   = useState(year);
 
-  const dept = emp.department ?? getDepartment(emp.role);
+  const dept    = emp.department ?? getDepartment(emp.role);
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
 
   const todayStr    = formatDate(today.getFullYear(), today.getMonth()+1, today.getDate());
@@ -49,30 +52,24 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const firstDow    = new Date(cardYear, cardMonth-1, 1).getDay();
   const startOffset = firstDow === 0 ? 6 : firstDow - 1;
 
-  const getShift = (day: number): ShiftType => {
+  const getShiftEntry = (day: number) => {
     const dateStr = formatDate(cardYear, cardMonth, day);
-    const entry = data.shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
-    return entry?.shift ?? 'off';
+    return data.shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
   };
 
-  // Статистика
-  const stats: Partial<Record<ShiftType, number>> = {};
-  let totalHours = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const s = getShift(d);
-    if (s !== 'off') {
-      stats[s] = (stats[s] ?? 0) + 1;
-      totalHours += SHIFT_HOURS[s];
-    }
-  }
-
   // Смена сегодня
-  const todayShiftEntry = data.shifts.find(s => s.employeeId === emp.id && s.date === todayStr);
-  const todayShift: ShiftType = todayShiftEntry?.shift ?? 'off';
-  const todayCfg = SHIFT_CONFIG[todayShift];
-  const todayTimes = SHIFT_TIMES[todayShift];
+  const todayEntry  = data.shifts.find(s => s.employeeId === emp.id && s.date === todayStr);
+  const todayShift: ShiftType = todayEntry?.shift ?? 'off';
+  const todayRole   = todayEntry?.role || emp.role;
+  const todayCfg    = SHIFT_CONFIG[todayShift];
+  const todayTimes  = SHIFT_TIMES[todayShift];
 
-  // Telegram username — в демо нет, но если будет
+  // Цвет шапки — по должности сегодня
+  const headerDept   = getDepartment(todayRole) ?? dept;
+  const headerColor  = headerDept
+    ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[headerDept]
+    : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+
   const tgUsername = (emp as Employee & { tgUsername?: string }).tgUsername;
 
   const CAL_CELL: Record<ShiftType, string> = isDark ? {
@@ -95,13 +92,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
 
-  // Градиент шапки по отделу
-  const headerGradient = deptCfg
-    ? { power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' }[dept!]
-    : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
-
-  const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -116,12 +106,17 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 
         <div className="overflow-y-auto flex-1">
           {/* Шапка */}
-          <div className="rounded-t-3xl p-5 text-white" style={{ background: headerGradient }}>
+          <div className="rounded-t-3xl p-5 text-white" style={{ background: headerColor }}>
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-extrabold shadow-inner">
+                {/* Аватар — цвет отдела */}
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-inner"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', border: '3px solid rgba(255,255,255,0.5)' }}
+                >
                   {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
                 </div>
+
                 <div>
                   <h2 className="font-extrabold text-xl leading-tight">{emp.name}</h2>
                   <p className="text-white/70 text-sm mt-0.5">{emp.role}</p>
@@ -130,6 +125,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                       {deptCfg.icon} {deptCfg.label}
                     </span>
                   )}
+
                 </div>
               </div>
               <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-xl active:scale-95">×</button>
@@ -151,7 +147,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 
             {/* Кнопки действий */}
             <div className="flex gap-2 mt-4">
-              {/* Отметить другом */}
               <button
                 onClick={() => onToggleFriend(emp.id)}
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl font-semibold text-sm transition-all active:scale-95 ${
@@ -164,7 +159,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                 <span>{isFriend ? 'В друзьях' : 'Добавить'}</span>
               </button>
 
-              {/* Написать в Telegram */}
               {tgUsername ? (
                 <a
                   href={`https://t.me/${tgUsername}`}
@@ -188,37 +182,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
             </div>
           </div>
 
-          {/* Статистика */}
-          <div className={`mx-4 mt-4 rounded-2xl p-4 border ${card}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className={`font-semibold text-sm ${lbl}`}>
-                📊 {MONTHS_RU_FULL[cardMonth-1]} {cardYear}
-              </h3>
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-extrabold text-indigo-500">{totalHours}</span>
-                <span className={`text-xs pb-0.5 ${sub}`}>ч</span>
-              </div>
-            </div>
-            {Object.keys(stats).length > 0 ? (
-              <div className="grid grid-cols-3 gap-2">
-                {(Object.entries(stats) as [ShiftType, number][]).map(([shift, cnt]) => {
-                  const cfg = SHIFT_CONFIG[shift];
-                  return (
-                    <div key={shift} className={`rounded-xl p-2.5 text-center border-2 ${CAL_CELL[shift]}`}>
-                      <div className="text-lg mb-0.5">{cfg.icon}</div>
-                      <div className="text-xl font-extrabold leading-none">{cnt}</div>
-                      <div className="text-[9px] mt-0.5 font-semibold opacity-80">{cfg.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className={`text-sm text-center py-3 ${sub}`}>Смен нет</p>
-            )}
-          </div>
-
-          {/* Календарь */}
-          <div className={`mx-4 mt-3 mb-6 rounded-2xl border overflow-hidden ${card}`}>
+          {/* Личный календарь */}
+          <div className={`mx-4 mt-4 mb-6 rounded-2xl border overflow-hidden ${card}`}>
             {/* Слайдер */}
             <div className={`flex items-center p-2 border-b ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
               <button
@@ -241,40 +206,53 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
               ))}
             </div>
 
-            {/* Ячейки */}
+            {/* Ячейки — цвет зависит от должности в этот день */}
             <div className="grid grid-cols-7 gap-[2px] p-[3px]">
               {Array.from({ length: startOffset }).map((_,i) => <div key={`e${i}`} />)}
               {Array.from({ length: daysInMonth }, (_,i) => i+1).map(day => {
-                const dateStr  = formatDate(cardYear, cardMonth, day);
-                const shift    = getShift(day);
-                const isToday  = dateStr === todayStr;
+                const entry    = getShiftEntry(day);
+                const shift    = entry?.shift ?? 'off';
+                const dayRole  = entry?.role || emp.role;
+                const dayColor = getDeptColor(dayRole, emp.color);
+                const isToday  = formatDate(cardYear, cardMonth, day) === todayStr;
                 const dow      = new Date(cardYear, cardMonth-1, day).getDay();
                 const isWeekend= dow === 0 || dow === 6;
                 const times    = SHIFT_TIMES[shift];
+
+                // Для рабочих смен используем динамический цвет отдела вместо фиксированного класса
+                const isWorking = shift === 'daily' || shift === 'day' || shift === 'night';
 
                 return (
                   <div
                     key={day}
                     className={`relative flex flex-col items-center justify-start rounded-xl border-2 overflow-hidden pt-1 pb-1
                       ${isToday ? 'ring-2 ring-offset-1 ' + (isDark ? 'ring-indigo-400 ring-offset-slate-800' : 'ring-indigo-500 ring-offset-white') : ''}
-                      ${shift !== 'off' ? CAL_CELL[shift] : isDark ? `border-slate-700/50 ${isWeekend ? 'text-rose-500/40' : 'text-slate-700'}` : `border-gray-100 ${isWeekend ? 'text-rose-200' : 'text-gray-200'}`}
+                      ${!isWorking && shift !== 'off' ? CAL_CELL[shift] : ''}
+                      ${shift === 'off' ? isDark ? `border-slate-700/50 ${isWeekend ? 'text-rose-500/40' : 'text-slate-700'}` : `border-gray-100 ${isWeekend ? 'text-rose-200' : 'text-gray-200'}` : ''}
                     `}
-                    style={{ minHeight: '52px' }}
+                    style={isWorking ? {
+                      backgroundColor: dayColor + '25',
+                      borderColor: dayColor + '80',
+                      color: dayColor,
+                      minHeight: '60px',
+                    } : { minHeight: '60px' }}
                   >
                     <span className={`text-[11px] font-bold leading-tight ${isWeekend && shift === 'off' ? 'text-rose-400' : ''}`}>{day}</span>
-                    {shift !== 'off' && times && (
-                      shift === 'daily' ? (
-                        <span className="text-[10px] font-extrabold leading-none mt-0.5">С</span>
-                      ) : (
-                        <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
-                          <div className={`w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] ${isDark ? 'bg-white/20' : 'bg-black/10'}`}>
-                            {times.start}
-                          </div>
-                          <div className={`w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] ${isDark ? 'bg-white/20' : 'bg-black/10'}`}>
-                            {times.end}
-                          </div>
+                    {isWorking && times && (
+                      <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
+                        <div
+                          className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                          style={{ backgroundColor: dayColor + '30', color: dayColor }}
+                        >
+                          {times.start}
                         </div>
-                      )
+                        <div
+                          className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                          style={{ backgroundColor: dayColor + '30', color: dayColor }}
+                        >
+                          {times.end}
+                        </div>
+                      </div>
                     )}
                     {shift === 'vacation' && <span className="text-[9px] font-bold leading-none mt-0.5">ОТ</span>}
                     {shift === 'sick'     && <span className="text-[9px] font-bold leading-none mt-0.5">Б</span>}
@@ -283,14 +261,17 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
               })}
             </div>
 
-            {/* Легенда */}
+            {/* Легенда — отделы вместо типов смен */}
             <div className={`flex flex-wrap gap-x-3 gap-y-1 px-3 py-2 border-t ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
-              {(['daily','day','night'] as ShiftType[]).filter(s => stats[s]).map(s => (
-                <div key={s} className="flex items-center gap-1">
-                  <div className={`w-3 h-3 rounded-sm border-2 ${CAL_CELL[s].split(' ').slice(0,2).join(' ')}`} />
-                  <span className={`text-[10px] font-semibold ${sub}`}>{SHIFT_CONFIG[s].label}</span>
-                </div>
-              ))}
+              {(['power','bar','hall','kitchen'] as const).map(d => {
+                const cfg = DEPARTMENT_CONFIG[d];
+                return (
+                  <div key={d} className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: cfg.color + '60', border: `1.5px solid ${cfg.color}` }} />
+                    <span className={`text-[10px] font-semibold ${sub}`}>{cfg.icon} {cfg.label}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

@@ -1,35 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ScheduleData,
-  DEPARTMENT_CONFIG, Department, getDepartment, Employee,
+  ScheduleData, DEPARTMENT_CONFIG, Department, getDepartment, Employee,
 } from '../types/schedule';
 import { useTheme } from '../context/ThemeContext';
 import { EmployeeCard } from './EmployeeCard';
+import { ReportsSection } from './ReportsSection';
+import {
+  getTgUser, getTgUserId, getTgFullName, initTelegramApp,
+  saveTgLink, removeTgLink, getEmpIdByTgId,
+  getOrCreateCodeForEmp, getEmpIdByCode,
+} from '../utils/telegram';
 
-interface TelegramUser {
-  id: number;
-  first_name: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-}
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initDataUnsafe?: { user?: TelegramUser };
-        colorScheme?: 'light' | 'dark';
-        ready?: () => void;
-      };
-    };
-  }
-}
+
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
 const STORAGE_LINKED_ID   = 'sf_linked_emp_id';
 const STORAGE_TG_NAME     = 'sf_tg_name';
 const STORAGE_FRIENDS_IDS = 'sf_friends_ids';
+
+// ── Telegram ID администраторов ───────────────────────────────────
+// Добавь сюда числовые Telegram ID тех кто должен видеть панель кодов
+const ADMIN_TG_IDS: number[] = [783948887, 6147055724]; // Шмакова Милена, Овчаренко Владимир
+// Имена администраторов — запрещён вход через поиск по имени
+const ADMIN_NAMES = ['овчаренко владимир', 'шмакова милена'];
 
 type ProfileSection = 'reports' | 'staff' | 'settings' | 'bugreport';
 
@@ -49,44 +43,38 @@ function findMatchingEmployees(data: ScheduleData, q: string) {
     .map(emp => ({ emp, score: nameSimilarity(emp.name, q) }))
     .filter(({ score }) => score > 0.3)
     .sort((a,b) => b.score - a.score)
-    .map(({ emp }) => emp);
+    .map(({ emp }) => emp)
+    .filter(emp => !ADMIN_NAMES.some(n =>
+      emp.name.toLowerCase().includes(n.split(' ')[0]) &&
+      emp.name.toLowerCase().includes(n.split(' ')[1])
+    ));
 }
 function toInputValue(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-interface ProfileViewProps {
-  data: ScheduleData;
-  month: number;
-  year: number;
-  fakeDate: Date | null;
-  sheetId: string;
-  sheetGid: string;
-  onSave: (id: string, gid: string) => void;
-  lastSync: string | null;
-  isLoading: boolean;
-  onRefresh: () => void;
-  error: string | null;
-  onFakeDateChange: (d: Date | null) => void;
-  onLinkedEmpChange: (id: string | null) => void;
-}
-
-// ── Settings Section ───────────────────────────────────────────────
+// ── Settings Section ──────────────────────────────────────────────
 interface SettingsSectionProps {
   sheetId: string; sheetGid: string;
-  onSave: (id: string, gid: string) => void;
+  sheetsApiKey?: string;
+  onSave: (id: string, gid: string, apiKey?: string) => void;
   lastSync: string | null;
   isLoading: boolean; onRefresh: () => void;
   error: string | null;
   fakeDate: Date | null;
   onFakeDateChange: (d: Date | null) => void;
+  onUnlink?: () => void;
+  onOpenAdminPanel?: () => void;
+  isAdmin?: boolean;
 }
 const SettingsSection: React.FC<SettingsSectionProps> = ({
-  sheetId, sheetGid, onSave, lastSync, isLoading, onRefresh, error, fakeDate, onFakeDateChange,
+  sheetId, sheetGid, sheetsApiKey = '', onSave, lastSync, isLoading, onRefresh, error, fakeDate, onFakeDateChange, onUnlink,
+  onOpenAdminPanel, isAdmin = false,
 }) => {
   const { isDark, setTheme } = useTheme();
-  const [localId, setLocalId]   = useState(sheetId);
-  const [localGid, setLocalGid] = useState(sheetGid);
+  const [localId, setLocalId]       = useState(sheetId);
+  const [localGid, setLocalGid]     = useState(sheetGid);
+  const [localApiKey, setLocalApiKey] = useState(sheetsApiKey);
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
 
@@ -99,7 +87,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     const id = localId.includes('spreadsheets/d/')
       ? localId.split('spreadsheets/d/')[1].split('/')[0]
       : localId.trim();
-    onSave(id, localGid);
+    onSave(id, localGid, localApiKey.trim() || undefined);
   };
 
   const handleFakeDateToggle = (v: boolean) => {
@@ -139,8 +127,8 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       </div>
 
-      {/* Google Sheets */}
-      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+      {/* Google Sheets — только для администраторов */}
+      {isAdmin && <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
         <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🔗 Google Таблица</h3>
         <div className="space-y-3">
           <div>
@@ -161,6 +149,25 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
               className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
             />
           </div>
+
+          {/* Sheets API Key — необязательно, нужен для листов по месяцам */}
+          <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-amber-50 border-amber-200'}`}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="text-sm">🗝️</span>
+              <span className={`text-xs font-bold ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>Google Sheets API Key</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${isDark ? 'bg-slate-600 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>необязательно</span>
+            </div>
+            <p className={`text-[11px] mb-2 ${isDark ? 'text-slate-400' : 'text-amber-600'}`}>
+              Без ключа листы по месяцам не работают. С ключом — автоматически переключается на нужный месяц.
+            </p>
+            <input
+              type="text" value={localApiKey}
+              onChange={e => setLocalApiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 ${inp}`}
+            />
+          </div>
+
           <button
             onClick={handleSave}
             className="w-full py-3 rounded-xl bg-indigo-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-indigo-600"
@@ -168,7 +175,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
         {(lastSync || isLoading || error) && (
           <div className={`mt-3 flex items-center justify-between text-xs p-2.5 rounded-xl ${isDark ? 'bg-slate-700' : 'bg-gray-50'}`}>
-            <span className={sub}>{isLoading ? '⏳ Синхронизация...' : error ? `❌ ${error}` : lastSync ? `✅ Синхронизировано` : ''}</span>
+            <span className={sub}>{isLoading ? '⏳ Синхронизация...' : error ? `❌ ${error}` : lastSync ? '✅ Синхронизировано' : ''}</span>
             {!isLoading && (
               <button onClick={onRefresh} className="text-indigo-500 font-semibold active:scale-95">↻ Обновить</button>
             )}
@@ -181,9 +188,9 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           <p>• C1+ — числа месяца</p>
           <p>• Смены: С/с — сутки, Д/д — день, Н/н — ночь</p>
         </div>
-      </div>
+      </div>}
 
-      {/* Тестовая дата */}
+      {isAdmin && (
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -207,15 +214,156 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         )}
         {fakeDateEnabled && fakeDate && (
           <p className="text-xs text-amber-500 font-semibold mt-2">
-            ⚠️ Активна тестовая дата: {fakeDate.getDate()} {MONTHS_RU_FULL[fakeDate.getMonth()].toLowerCase()} {fakeDate.getFullYear()}
+            ⚠️ Активна: {fakeDate.getDate()} {MONTHS_RU_FULL[fakeDate.getMonth()].toLowerCase()} {fakeDate.getFullYear()}
           </p>
         )}
+      </div>
+      )}
+
+      {/* Панель администратора — только для авторизованных */}
+      {isAdmin && (
+        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+          <h3 className={`font-bold text-sm mb-2 ${lbl}`}>🛡 Администратор</h3>
+          <button
+            onClick={onOpenAdminPanel}
+            className="w-full py-2.5 rounded-xl bg-indigo-500 text-white font-semibold text-sm active:scale-95 transition-all"
+          >
+            🔑 Коды для сотрудников →
+          </button>
+        </div>
+      )}
+
+      {/* Отвязать аккаунт */}
+      {onUnlink && (
+        <button
+          onClick={onUnlink}
+          className={`w-full py-3 rounded-2xl text-sm font-semibold border transition-all active:scale-95 ${
+            isDark ? 'border-slate-700 text-slate-500 hover:text-red-400 hover:border-red-800' : 'border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200'
+          }`}
+        >
+          Отвязать аккаунт
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ── Admin Codes Panel ─────────────────────────────────────────────
+interface AdminCodesPanelProps {
+  data: ScheduleData;
+  onClose: () => void;
+  lastSync?: string | null;
+  isLoading?: boolean;
+  error?: string | null;
+  onRefresh?: () => void;
+}
+const AdminCodesPanel: React.FC<AdminCodesPanelProps> = ({ data, onClose, lastSync, isLoading, error, onRefresh }) => {
+  const { isDark } = useTheme();
+  const [copied, setCopied] = useState<string | null>(null);
+  const [activeDept, setActiveDept] = useState<Department | 'all'>('all');
+
+  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+  const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
+  const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
+
+  const copyCode = (code: string, empName: string) => {
+    const text = `Привет, ${empName.split(' ')[0]}! Твой код для входа в ShiftFlow: *${code}*\nОткрой бота и введи этот код 👆`;
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopied(code);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const filteredEmps = activeDept === 'all'
+    ? data.employees
+    : data.employees.filter(e => {
+        const allRoles = e.roles && e.roles.length > 0 ? e.roles : [e.role];
+        return allRoles.some(r => getDepartment(r) === activeDept);
+      });
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: isDark ? '#0f172a' : '#f1f5f9' }}>
+      {/* Header */}
+      <div className={`flex items-center gap-3 px-4 py-4 border-b ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'}`}>
+        <button onClick={onClose} className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg active:scale-90 ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>←</button>
+        <div className="flex-1">
+          <h2 className={`font-bold text-base ${lbl}`}>🔑 Коды сотрудников</h2>
+          <p className={`text-xs ${sub}`}>Нажми на код чтобы скопировать сообщение</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isLoading && <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />}
+          {!isLoading && !error && lastSync && <div className="w-2 h-2 bg-emerald-400 rounded-full" />}
+          {!isLoading && error && <div className="w-2 h-2 bg-red-400 rounded-full" />}
+          {onRefresh && !isLoading && (
+            <button onClick={onRefresh} className="text-indigo-500 text-xs font-semibold active:scale-95">↻</button>
+          )}
+        </div>
+      </div>
+      {/* Статус синхронизации */}
+      {(lastSync || error) && (
+        <div className={`px-4 py-2 text-xs border-b ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-gray-50 border-gray-100 text-gray-500'}`}>
+          {error ? `❌ ${error}` : `✅ Синхронизировано: ${new Date(lastSync!).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
+        </div>
+      )}
+
+      {/* Фильтр */}
+      <div className={`px-4 py-3 border-b ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'}`}>
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+          {([
+            { id: 'all', label: 'Все', icon: '👥' },
+            ...DEPT_ORDER.map(d => ({ id: d, label: DEPARTMENT_CONFIG[d].label, icon: DEPARTMENT_CONFIG[d].icon })),
+          ] as { id: Department | 'all'; label: string; icon: string }[]).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveDept(tab.id)}
+              className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+                activeDept === tab.id
+                  ? 'bg-indigo-500 text-white'
+                  : isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-gray-100 text-gray-500'
+              }`}
+            >{tab.icon} {tab.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Список */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {filteredEmps.map(emp => {
+          const code = getOrCreateCodeForEmp(emp.id);
+          const dept = emp.department ?? getDepartment(emp.role);
+          const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
+          const isCopied = copied === code;
+          return (
+            <div key={emp.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${card}`}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: emp.color }}>
+                {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold truncate ${lbl}`}>{emp.name}</p>
+                <p className={`text-xs truncate ${sub}`}>{emp.role}</p>
+                {deptCfg && <span className="text-[10px] font-semibold" style={{ color: deptCfg.color }}>{deptCfg.icon} {deptCfg.label}</span>}
+              </div>
+              <button
+                onClick={() => copyCode(code, emp.name)}
+                className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl font-mono font-bold text-sm transition-all active:scale-90 ${
+                  isCopied
+                    ? 'bg-emerald-100 text-emerald-600 border border-emerald-300'
+                    : isDark ? 'bg-indigo-900/50 text-indigo-300 border border-indigo-700' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+                }`}
+              >
+                <span className="tracking-widest">{code}</span>
+                <span className={`text-[9px] font-normal tracking-normal ${isCopied ? 'text-emerald-500' : sub}`}>
+                  {isCopied ? '✓ скопировано' : 'нажми'}
+                </span>
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 };
 
-// ── Staff Section ──────────────────────────────────────────────────
+// ── Staff Section ─────────────────────────────────────────────────
 interface StaffSectionProps {
   data: ScheduleData;
   today: Date;
@@ -227,8 +375,7 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
   const { isDark } = useTheme();
   const [activeDept, setActiveDept]   = useState<Department | 'all'>('all');
   const [friendIds, setFriendIds]     = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_FRIENDS_IDS) || '[]'); }
-    catch { return []; }
+    try { return JSON.parse(localStorage.getItem(STORAGE_FRIENDS_IDS) || '[]'); } catch { return []; }
   });
   const [search, setSearch]           = useState('');
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -241,22 +388,35 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
     });
   };
 
+  // Получаем ВСЕ отделы сотрудника (учитывая совмещённые должности)
+  const getEmpDepts = (emp: Employee): Department[] => {
+    const allRoles = emp.roles && emp.roles.length > 0 ? emp.roles : [emp.role];
+    const depts = allRoles
+      .map(r => getDepartment(r))
+      .filter((d): d is Department => d !== null);
+    // Убираем дубли
+    return [...new Set(depts)];
+  };
+
   const filtered = data.employees.filter(emp => {
     if (emp.id === linkedEmpId) return false;
-    const deptMatch = activeDept === 'all' || (emp.department ?? getDepartment(emp.role)) === activeDept;
+    const empDepts = getEmpDepts(emp);
+    const deptMatch = activeDept === 'all' || empDepts.includes(activeDept as Department);
     const searchMatch = !search.trim() || normalizeName(emp.name).includes(normalizeName(search));
     return deptMatch && searchMatch;
   });
 
-  // Друзья сначала, потом остальные
-  const friends    = filtered.filter(e => friendIds.includes(e.id));
-  const nonFriends = filtered.filter(e => !friendIds.includes(e.id));
-
-  // Группировка не-друзей по отделам
+  const friends = filtered.filter(e => friendIds.includes(e.id));
   const byDept: Record<Department, Employee[]> = { power:[], bar:[], hall:[], kitchen:[] };
-  nonFriends.forEach(emp => {
-    const dept = emp.department ?? getDepartment(emp.role) ?? 'hall';
-    byDept[dept].push(emp);
+  filtered.forEach(emp => {
+    const empDepts = getEmpDepts(emp);
+    // Если у сотрудника несколько отделов — дублируем в каждый
+    const deptsToShow = empDepts.length > 0 ? empDepts : ['kitchen' as Department];
+    deptsToShow.forEach(d => {
+      if (!byDept[d].find(e => e.id === emp.id)) {
+        byDept[d].push(emp);
+      }
+    });
   });
 
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
@@ -279,7 +439,7 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
         )}
       </div>
 
-      {/* Фильтр по отделу */}
+      {/* Фильтр */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
         {([
           { id: 'all', label: 'Все', icon: '👥' },
@@ -294,13 +454,12 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
                 : isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-white text-gray-500 border border-gray-200 shadow-sm'
             }`}
           >
-            <span>{tab.icon}</span>
-            <span>{tab.label}</span>
+            <span>{tab.icon}</span><span>{tab.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Друзья — отдельный блок сверху */}
+      {/* Друзья */}
       {friends.length > 0 && (
         <div>
           <div className="flex items-center gap-1.5 px-1 mb-2">
@@ -309,19 +468,14 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
           </div>
           <div className={`rounded-2xl border overflow-hidden shadow-sm ${card}`}>
             {friends.map((emp, i) => (
-              <EmpRow
-                key={emp.id} emp={emp}
-                isFriend={true}
-                onToggleFriend={toggleFriend}
-                onOpen={() => setSelectedEmp(emp)}
-                isLast={i === friends.length - 1}
-              />
+              <EmpRow key={emp.id} emp={emp} isFriend={true}
+                onToggleFriend={toggleFriend} onOpen={() => setSelectedEmp(emp)} isLast={i === friends.length - 1} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Остальные сотрудники */}
+      {/* По отделам */}
       {activeDept === 'all' ? (
         DEPT_ORDER.map(dept => {
           const group = byDept[dept];
@@ -335,13 +489,8 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
               </div>
               <div className={`rounded-2xl border overflow-hidden shadow-sm ${card}`}>
                 {group.map((emp, i) => (
-                  <EmpRow
-                    key={emp.id} emp={emp}
-                    isFriend={friendIds.includes(emp.id)}
-                    onToggleFriend={toggleFriend}
-                    onOpen={() => setSelectedEmp(emp)}
-                    isLast={i === group.length - 1}
-                  />
+                  <EmpRow key={emp.id} emp={emp} isFriend={friendIds.includes(emp.id)}
+                    onToggleFriend={toggleFriend} onOpen={() => setSelectedEmp(emp)} isLast={i === group.length - 1} />
                 ))}
               </div>
             </div>
@@ -349,17 +498,12 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
         })
       ) : (
         <div className={`rounded-2xl border overflow-hidden shadow-sm ${card}`}>
-          {nonFriends.length === 0 && friends.length === 0 && (
+          {filtered.length === 0 && (
             <div className={`py-8 text-center text-sm ${sub}`}>Никого не найдено</div>
           )}
-          {nonFriends.map((emp, i) => (
-            <EmpRow
-              key={emp.id} emp={emp}
-              isFriend={friendIds.includes(emp.id)}
-              onToggleFriend={toggleFriend}
-              onOpen={() => setSelectedEmp(emp)}
-              isLast={i === nonFriends.length - 1}
-            />
+          {filtered.map((emp, i) => (
+            <EmpRow key={emp.id} emp={emp} isFriend={friendIds.includes(emp.id)}
+              onToggleFriend={toggleFriend} onOpen={() => setSelectedEmp(emp)} isLast={i === filtered.length - 1} />
           ))}
         </div>
       )}
@@ -377,25 +521,21 @@ const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, l
   );
 };
 
-// ── EmpRow ─────────────────────────────────────────────────────────
+// ── EmpRow ────────────────────────────────────────────────────────
 interface EmpRowProps {
-  emp: Employee;
-  isFriend: boolean;
+  emp: Employee; isFriend: boolean;
   onToggleFriend: (id: string) => void;
-  onOpen: () => void;
-  isLast: boolean;
+  onOpen: () => void; isLast: boolean;
 }
 const EmpRow: React.FC<EmpRowProps> = ({ emp, isFriend, onToggleFriend, onOpen, isLast }) => {
   const { isDark } = useTheme();
   const sub = isDark ? 'text-slate-400' : 'text-gray-500';
   const lbl = isDark ? 'text-slate-100' : 'text-gray-900';
-
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 active:scale-[0.99] transition-all ${!isLast ? isDark ? 'border-b border-slate-700' : 'border-b border-gray-50' : ''}`}>
+    <div className={`flex items-center gap-3 px-4 py-3 transition-all ${!isLast ? isDark ? 'border-b border-slate-700' : 'border-b border-gray-50' : ''}`}>
       <div
         className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 cursor-pointer active:scale-95"
-        style={{ backgroundColor: emp.color }}
-        onClick={onOpen}
+        style={{ backgroundColor: emp.color }} onClick={onOpen}
       >
         {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
       </div>
@@ -406,9 +546,7 @@ const EmpRow: React.FC<EmpRowProps> = ({ emp, isFriend, onToggleFriend, onOpen, 
       <button
         onClick={e => { e.stopPropagation(); onToggleFriend(emp.id); }}
         className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all active:scale-90 flex-shrink-0 ${
-          isFriend
-            ? 'bg-amber-100 text-amber-500'
-            : isDark ? 'bg-slate-700 text-slate-500' : 'bg-gray-100 text-gray-400'
+          isFriend ? 'bg-amber-100 text-amber-500' : isDark ? 'bg-slate-700 text-slate-500' : 'bg-gray-100 text-gray-400'
         }`}
       >
         {isFriend ? '⭐' : '☆'}
@@ -417,43 +555,93 @@ const EmpRow: React.FC<EmpRowProps> = ({ emp, isFriend, onToggleFriend, onOpen, 
   );
 };
 
-// ── ProfileView ────────────────────────────────────────────────────
+// ── ProfileView ───────────────────────────────────────────────────
+interface ProfileViewProps {
+  data: ScheduleData;
+  month: number; year: number;
+  fakeDate: Date | null;
+  sheetId: string; sheetGid: string;
+  sheetsApiKey?: string;
+  onSave: (id: string, gid: string, apiKey?: string) => void;
+  lastSync: string | null;
+  isLoading: boolean; onRefresh: () => void;
+  error: string | null;
+  onFakeDateChange: (d: Date | null) => void;
+  onLinkedEmpChange: (id: string | null) => void;
+  onMonthChange?: (month: number, year: number) => void;
+}
+
 export const ProfileView: React.FC<ProfileViewProps> = ({
-  data, month, year, fakeDate, sheetId, sheetGid,
+  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '',
   onSave, lastSync, isLoading, onRefresh, error,
-  onFakeDateChange, onLinkedEmpChange,
+  onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
 }) => {
   const { isDark } = useTheme();
   const today = fakeDate ?? new Date();
 
   const [activeSection, setActiveSection] = useState<ProfileSection>('staff');
-  const [linkedEmpId, setLinkedEmpId] = useState<string | null>(() => localStorage.getItem(STORAGE_LINKED_ID));
-  const [tgName, setTgName]           = useState<string | null>(() => localStorage.getItem(STORAGE_TG_NAME));
-  const [isLinking, setIsLinking]     = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [linkedEmpId, setLinkedEmpId]     = useState<string | null>(() => localStorage.getItem(STORAGE_LINKED_ID));
+  const [tgName, setTgName]               = useState<string | null>(() => localStorage.getItem(STORAGE_TG_NAME));
+  const [isLinking, setIsLinking]         = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState<Employee[]>([]);
+  const [inviteCode, setInviteCode]       = useState('');
+  const [codeError, setCodeError]         = useState<string | null>(null);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
 
-  const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const tgUser = getTgUser();
+  const tgId   = getTgUserId();
+  const isAdmin = tgId !== null && ADMIN_TG_IDS.includes(tgId);
 
-  useEffect(() => { window.Telegram?.WebApp?.ready?.(); }, []);
+  // Инициализация Telegram
+  useEffect(() => {
+    initTelegramApp();
+  }, []);
+
+  // Автологин через Telegram ID
+  useEffect(() => {
+    if (tgId && !linkedEmpId && data.employees.length > 0) {
+      const empId = getEmpIdByTgId(tgId);
+      if (empId && data.employees.find(e => e.id === empId)) {
+        setLinkedEmpId(empId);
+        onLinkedEmpChange(empId);
+        localStorage.setItem(STORAGE_LINKED_ID, empId);
+      }
+    }
+  }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
 
   const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
   const deptCfg   = dept ? DEPARTMENT_CONFIG[dept] : null;
 
+  const isAdminEmployee = (emp: Employee) =>
+    ADMIN_NAMES.some(n => emp.name.toLowerCase().includes(n.split(' ')[0]) &&
+      emp.name.toLowerCase().includes(n.split(' ')[1]));
+
   const handleLinkEmployee = (id: string, name: string) => {
+    // Блокируем вход через поиск для администраторов
+    const emp = data.employees.find(e => e.id === id);
+    if (emp && isAdminEmployee(emp)) {
+      setCodeError('Этот сотрудник может войти только через код администратора.');
+      return;
+    }
     setLinkedEmpId(id);
     onLinkedEmpChange(id);
     localStorage.setItem(STORAGE_LINKED_ID, id);
-    const displayName = tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : name;
+    // Привязываем Telegram ID
+    if (tgId) saveTgLink(tgId, id);
+    const displayName = tgUser ? getTgFullName(tgUser) : name;
     setTgName(displayName);
     localStorage.setItem(STORAGE_TG_NAME, displayName);
     setIsLinking(false);
     setSearchQuery('');
     setSearchResults([]);
+    setCodeError(null);
+    setInviteCode('');
   };
 
   const handleUnlink = () => {
+    if (tgId) removeTgLink(tgId);
     setLinkedEmpId(null);
     onLinkedEmpChange(null);
     localStorage.removeItem(STORAGE_LINKED_ID);
@@ -462,15 +650,59 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setIsLinking(true);
   };
 
+  // Вход по коду приглашения
+  const handleCodeSubmit = () => {
+    const code = inviteCode.trim().toUpperCase();
+    if (!code) return;
+    const rawEmpId = getEmpIdByCode(code);
+    if (!rawEmpId) {
+      setCodeError('Неверный код. Попробуй ещё раз или обратись к администратору.');
+      return;
+    }
+
+    // Обработка хардкодных кодов администраторов
+    if (rawEmpId.startsWith('__admin_tgid_')) {
+      const adminTgId = parseInt(rawEmpId.replace('__admin_tgid_', '').replace('__', ''));
+      // Ищем сотрудника по имени через ADMIN_HARDCODED_CODES
+      const adminNames: Record<number, string> = {
+        6147055724: 'Овчаренко Владимир',
+        783948887:  'Шмакова Милена',
+      };
+      const adminName = adminNames[adminTgId];
+      if (adminName) {
+        const found = data.employees.find(e =>
+          e.name.toLowerCase().includes(adminName.split(' ')[0].toLowerCase()) ||
+          e.name.toLowerCase().includes(adminName.split(' ')[1]?.toLowerCase() ?? '')
+        );
+        if (found) {
+          // Привязываем adminTgId к найденному сотруднику
+          saveTgLink(adminTgId, found.id);
+          handleLinkEmployee(found.id, found.name);
+          return;
+        }
+      }
+      setCodeError('Сотрудник администратора не найден в текущем графике.');
+      return;
+    }
+
+    const emp = data.employees.find(e => e.id === rawEmpId);
+    if (!emp) {
+      setCodeError('Сотрудник не найден в текущем графике. Попробуй позже.');
+      return;
+    }
+    handleLinkEmployee(rawEmpId, emp.name);
+  };
+
+
+
   const headerGradient = dept
-    ? { power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' }[dept]
+    ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[dept]
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
 
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
 
-  // ── Горизонтальная сетка навигации ──
   const SECTIONS: { id: ProfileSection; label: string; icon: string }[] = [
     { id: 'reports',   label: 'Отчёты',     icon: '📊' },
     { id: 'staff',     label: 'Сотрудники', icon: '👥' },
@@ -494,21 +726,54 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             )}
             <div>
               <h2 className="font-bold text-lg leading-tight">
-                {tgUser ? [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') : 'Мой профиль'}
+                {tgUser ? getTgFullName(tgUser) : 'Мой профиль'}
               </h2>
               {tgUser?.username && <p className="text-white/60 text-sm">@{tgUser.username}</p>}
+              {tgId && <p className="text-white/40 text-xs">ID: {tgId}</p>}
             </div>
           </div>
-          <p className="text-white/70 text-sm">Найди себя в таблице, чтобы видеть личный календарь</p>
+          <p className="text-white/70 text-sm">Введи код от администратора или найди себя вручную</p>
         </div>
 
-        {/* Поиск */}
+        {/* Ввод кода */}
         <div className={`rounded-2xl p-4 shadow-sm border ${card}`}>
-          <h3 className={`font-semibold text-sm mb-3 ${lbl}`}>🔍 Найди себя в расписании</h3>
+          <h3 className={`font-bold text-sm mb-1 ${lbl}`}>🔑 Войти по коду</h3>
+          <p className={`text-xs mb-3 ${sub}`}>Получи код у администратора и введи его ниже</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={e => { setInviteCode(e.target.value.toUpperCase()); setCodeError(null); }}
+              onKeyDown={e => e.key === 'Enter' && handleCodeSubmit()}
+              placeholder="XXXXXX"
+              maxLength={6}
+              className={`flex-1 text-center text-xl font-bold tracking-[0.4em] border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 uppercase ${
+                codeError
+                  ? 'border-red-400 bg-red-50 text-red-700'
+                  : isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-600' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-300'
+              }`}
+            />
+            <button
+              onClick={handleCodeSubmit}
+              disabled={inviteCode.length < 4}
+              className="px-5 py-3 rounded-xl bg-indigo-500 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40"
+            >
+              Войти
+            </button>
+          </div>
+          {codeError && (
+            <p className="text-xs text-red-500 font-medium mt-2">⚠️ {codeError}</p>
+          )}
+        </div>
+
+        {/* Поиск вручную */}
+        <div className={`rounded-2xl p-4 shadow-sm border ${card}`}>
+          <h3 className={`font-semibold text-sm mb-1 ${lbl}`}>🔍 Или найди себя вручную</h3>
+          <p className={`text-xs mb-3 ${sub}`}>Введи своё имя или фамилию</p>
           <input
             type="text" value={searchQuery}
             onChange={e => { setSearchQuery(e.target.value); setSearchResults(findMatchingEmployees(data, e.target.value)); }}
-            placeholder="Введи имя или фамилию..."
+            placeholder="Иванов Иван..."
             className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
           />
           {searchResults.length > 0 && (
@@ -551,6 +816,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="px-4 pt-2">
               <SettingsSection
                 sheetId={sheetId} sheetGid={sheetGid}
+                sheetsApiKey={sheetsApiKey}
                 onSave={onSave} lastSync={lastSync}
                 isLoading={isLoading} onRefresh={onRefresh}
                 error={error} fakeDate={fakeDate}
@@ -571,7 +837,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div className="w-full space-y-4 pb-6">
 
-      {/* ── Шапка профиля ── */}
+      {/* Шапка */}
       <div className="rounded-3xl overflow-hidden shadow-lg">
         <div className="p-5 text-white" style={{ background: headerGradient }}>
           <div className="flex items-start justify-between">
@@ -600,7 +866,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       </div>
 
-      {/* ── Горизонтальная сетка навигации ── */}
+      {/* Навигация — горизонтальная сетка 2×2 */}
       <div className="grid grid-cols-4 gap-2">
         {SECTIONS.map(sec => (
           <button
@@ -620,31 +886,38 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         ))}
       </div>
 
-      {/* ── Контент секций ── */}
-
+      {/* Контент */}
       {activeSection === 'reports' && (
-        <div className={`rounded-2xl p-8 border shadow-sm text-center ${card}`}>
-          <p className="text-4xl mb-3">📊</p>
-          <p className={`font-bold text-base mb-1 ${lbl}`}>Отчёты</p>
-          <p className={`text-sm ${sub}`}>Скоро появится статистика по сменам, часам и зарплате</p>
-        </div>
+        <ReportsSection data={data} linkedEmpId={linkedEmpId} />
       )}
 
       {activeSection === 'staff' && (
-        <StaffSection
-          data={data} today={today}
-          month={month} year={year}
-          linkedEmpId={linkedEmpId}
-        />
+        <StaffSection data={data} today={today} month={month} year={year} linkedEmpId={linkedEmpId} />
       )}
 
       {activeSection === 'settings' && (
         <SettingsSection
           sheetId={sheetId} sheetGid={sheetGid}
+          sheetsApiKey={sheetsApiKey}
           onSave={onSave} lastSync={lastSync}
           isLoading={isLoading} onRefresh={onRefresh}
           error={error} fakeDate={fakeDate}
           onFakeDateChange={onFakeDateChange}
+          onUnlink={handleUnlink}
+          isAdmin={isAdmin}
+          onOpenAdminPanel={() => setShowAdminPanel(true)}
+        />
+      )}
+
+      {/* Admin Panel */}
+      {showAdminPanel && (
+        <AdminCodesPanel
+          data={data}
+          onClose={() => setShowAdminPanel(false)}
+          lastSync={lastSync}
+          isLoading={isLoading}
+          error={error}
+          onRefresh={onRefresh}
         />
       )}
 
@@ -654,15 +927,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <p className={`font-bold text-base mb-1 ${lbl}`}>Баг-репорт</p>
           <p className={`text-sm ${sub}`}>Форма для сообщений об ошибках появится здесь</p>
         </div>
-      )}
-
-      {activeSection === 'settings' && (
-        <button
-          onClick={handleUnlink}
-          className={`w-full py-3 rounded-2xl text-sm font-semibold border transition-all active:scale-95 ${isDark ? 'border-slate-700 text-slate-500 hover:text-red-400 hover:border-red-800' : 'border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-200'}`}
-        >
-          Отвязать аккаунт
-        </button>
       )}
     </div>
   );
