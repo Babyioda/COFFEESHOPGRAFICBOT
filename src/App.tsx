@@ -10,12 +10,14 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 type TabId = 'shifts' | 'profile';
 
-const DEFAULT_SHEET_ID  = '1-agqJoAduuZMTOh-8Fft8n16jkTVp_9eMozRCaXCMBU';
+const DEFAULT_SHEET_ID = '1n5FzbrDQKp_kYCbCQ6DIMmXMWadwcbl7ccrWAzBJEiY';
 const DEFAULT_SHEET_GID = '0';
 const STORAGE_KEY_ID    = 'ss_sheet_id';
 const STORAGE_KEY_GID   = 'ss_sheet_gid';
-const STORAGE_KEY_API   = 'ss_sheets_api_key';
-const STORAGE_FAKE_DATE = 'ss_fake_date';
+const STORAGE_KEY_API    = 'ss_sheets_api_key';
+const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytWQyI60qdibQQCCMklCGS6IzniSYTZuNOkqCpzYP8P9fxlXchVuX2679MMwAQqJdI/exec';
+const STORAGE_FAKE_DATE  = 'ss_fake_date';
 
 if (!localStorage.getItem(STORAGE_KEY_ID)) {
   localStorage.setItem(STORAGE_KEY_ID, DEFAULT_SHEET_ID);
@@ -36,6 +38,14 @@ function AppInner() {
   const [sheetId, setSheetId]       = useState<string>(() => localStorage.getItem(STORAGE_KEY_ID) || DEFAULT_SHEET_ID);
   const [sheetGid, setSheetGid]     = useState<string>(() => localStorage.getItem(STORAGE_KEY_GID) || DEFAULT_SHEET_GID);
   const [sheetsApiKey, setSheetsApiKey] = useState<string>(() => localStorage.getItem(STORAGE_KEY_API) || '');
+  const [appsScriptUrl, setAppsScriptUrl] = useState<string>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY_SCRIPT);
+    if (!stored) {
+      localStorage.setItem(STORAGE_KEY_SCRIPT, DEFAULT_SCRIPT_URL);
+      return DEFAULT_SCRIPT_URL;
+    }
+    return stored;
+  });
 
   // Текущий месяц для просмотра
   const today = new Date();
@@ -107,20 +117,50 @@ function AppInner() {
     if (!id) return;
 
     const cacheKey = `${id}_${month}_${year}`;
-
-    // Определяем gid: из sheetMap или из настроек
-    let gid = gidOverride ?? sheetMap.get(`${month}_${year}`) ?? sheetGid;
+    const gid = gidOverride ?? sheetMap.get(`${month}_${year}`) ?? sheetGid;
 
     setLiveLoading(true);
     setLiveError(null);
 
     try {
-      const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
-      const res = await fetch(csvUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}: Не удалось загрузить таблицу`);
-      const text = await res.text();
-      if (text.trim().startsWith('<!')) throw new Error('Таблица недоступна. Проверьте доступ (Все с ссылкой)');
-      const parsed = parseGoogleSheetsCSV(text);
+      // Используем Apps Script если задан — он возвращает нужный лист по имени
+      const scriptUrl = localStorage.getItem('ss_apps_script_url') || appsScriptUrl;
+      let parsed;
+
+      if (scriptUrl) {
+        // Строим название листа для поиска
+        const MONTH_NAMES_RU = ['','январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+        const sheetName = `${MONTH_NAMES_RU[month].toUpperCase()} ${year}`;
+        const url = `${scriptUrl}?sheet=${encodeURIComponent(sheetName)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (text.trim().startsWith('<')) throw new Error('Apps Script вернул HTML — проверь настройки доступа');
+        const json = JSON.parse(text);
+        if (json.error) throw new Error(json.error);
+        if (!json.values || !json.values.length) throw new Error('Нет данных от Apps Script');
+        // Передаём массив напрямую — parseGoogleSheetsCSV принимает string[][]
+        parsed = parseGoogleSheetsCSV(json.values as string[][]);
+        // Обновляем карту листов из ответа
+        if (json.sheets) {
+          setSheetMap(prev => {
+            const next = new Map(prev);
+            for (const [key, val] of Object.entries(json.sheets as Record<string, {gid: string}>)) {
+              next.set(key, val.gid);
+            }
+            return next;
+          });
+        }
+      } else {
+        // Fallback — CSV
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+        const res = await fetch(csvUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: Не удалось загрузить таблицу`);
+        const text = await res.text();
+        if (text.trim().startsWith('<!')) throw new Error('Таблица недоступна. Проверьте доступ (Все с ссылкой)');
+        parsed = parseGoogleSheetsCSV(text);
+      }
+
       dataCache.set(cacheKey, parsed);
       setLiveData(parsed);
       setLastSync(new Date().toISOString());
@@ -180,7 +220,7 @@ function AppInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetId]);
 
-  const handleSaveSettings = (id: string, gid: string, apiKey?: string) => {
+  const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string) => {
     const cleanId = id.includes('spreadsheets/d/')
       ? id.split('spreadsheets/d/')[1].split('/')[0]
       : id.trim();
@@ -188,10 +228,15 @@ function AppInner() {
     setSheetGid(gid);
     localStorage.setItem(STORAGE_KEY_ID, cleanId);
     localStorage.setItem(STORAGE_KEY_GID, gid);
-    if (apiKey !== undefined) {
+      if (apiKey !== undefined) {
       setSheetsApiKey(apiKey);
       if (apiKey) localStorage.setItem(STORAGE_KEY_API, apiKey);
       else        localStorage.removeItem(STORAGE_KEY_API);
+    }
+    if (scriptUrl !== undefined) {
+      setAppsScriptUrl(scriptUrl);
+      if (scriptUrl) localStorage.setItem(STORAGE_KEY_SCRIPT, scriptUrl);
+      else           localStorage.removeItem(STORAGE_KEY_SCRIPT);
     }
     // Сбрасываем кэш и карту листов
     dataCache.clear();
@@ -294,6 +339,7 @@ function AppInner() {
             }}
             onMonthChange={handleMonthChange}
             sheetsApiKey={sheetsApiKey}
+            appsScriptUrl={appsScriptUrl}
           />
         )}
       </main>

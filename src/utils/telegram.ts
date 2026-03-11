@@ -107,6 +107,26 @@ export function openTelegramChat(username: string) {
 
 
 
+// ── Синхронизация с Apps Script ──────────────────────────────────
+
+const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytWQyI60qdibQQCCMklCGS6IzniSYTZuNOkqCpzYP8P9fxlXchVuX2679MMwAQqJdI/exec';
+
+/** Синхронизировать привязку tgId → empName в Google Sheets (лист Employees) */
+export async function syncTgLink(empName: string, tgId: number): Promise<void> {
+  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
+  if (!scriptUrl) return;
+  try {
+    await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'link', empName, tgId: String(tgId) }),
+    });
+  } catch {
+    // Не блокируем UI если синхронизация не удалась
+  }
+}
+
 // ── Привязка Telegram ID ─────────────────────────────────────────
 
 const STORAGE_TG_LINKS = 'sf_tg_links'; // { tgId: empId }

@@ -11,9 +11,10 @@ const AVATAR_COLORS = [
 const HEADER_WORDS = new Set([
   'бар', 'зал', 'кухня', 'власть', 'итого', 'всего', 'смены', 'график',
   'имя', 'фио', 'сотрудник', 'должность', 'позиция', 'отдел', 'группа',
-  'барменеджер', 'менеджер', 'официант', 'бармен', 'повар', 'администратор',
   'дата', 'день', 'число', 'месяц', 'январь', 'февраль', 'март', 'апрель',
   'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+  'менеджеры', 'бармены', 'официанты', 'повара', 'кухня',
+  'вылеты', 'пассажиров', 'рейсов',
 ]);
 
 function isEmployeeName(cell: string): boolean {
@@ -39,11 +40,15 @@ const NON_ROLE_PATTERNS = [
   /^кол[\s._-]*во/i,
   /^норм/i,
   /^\d+[\s.,]\d*$/,
+  /^стаж/i,
+  /^в день/i,
+  /^в ночь/i,
 ];
 
 function isRoleCell(cell: string): boolean {
   const val = cell.trim();
   if (!val) return false;
+  if (val === '  ' || val === ' ') return false;
   if (val.length === 1) return false;
   if (!isNaN(Number(val))) return false;
   const lower = val.toLowerCase();
@@ -54,12 +59,15 @@ function isRoleCell(cell: string): boolean {
 
 export function parseShiftValue(raw: string): ShiftType {
   const v = raw.trim().toLowerCase();
-  if (!v || v === '-' || v === '—' || v === 'в' || v === 'вых') return 'off';
+  if (!v || v === '-' || v === '—' || v === 'в' || v === 'вых' || v === 'о') return 'off';
   if (v === 'с' || v === 'c' || v === 'сут' || v === 'сутки') return 'daily';
   if (v.startsWith('от') || v === 'отп' || v === 'vacation') return 'vacation';
   if (v === 'б' || v === 'бл' || v === 'болен' || v === 'больн' || v === 'больничный' || v === 'sick') return 'sick';
   if (v === 'д' || v === 'd' || v === 'день' || v === 'дн' || v === 'дневная') return 'day';
   if (v === 'н' || v === 'n' || v === 'ночь' || v === 'ноч' || v === 'ночная') return 'night';
+  // Числа (часы смены) — считаем как рабочий день
+  const num = parseFloat(v);
+  if (!isNaN(num) && num > 0) return 'day';
   return 'off';
 }
 
@@ -83,15 +91,22 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-export function parseGoogleSheetsCSV(csvText: string): ScheduleData {
-  const rawLines = csvText.split('\n');
-  const rows = rawLines.map(parseCSVLine);
+// Принимает либо CSV строку, либо уже готовый массив rows (от Apps Script)
+export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
+  let rows: string[][];
+
+  if (typeof input === 'string') {
+    const rawLines = input.split('\n');
+    rows = rawLines.map(parseCSVLine);
+  } else {
+    rows = input;
+  }
 
   if (rows.length < 2) {
     return { employees: [], shifts: [], lastSync: new Date().toISOString() };
   }
 
-  // === Определяем месяц и год ===
+  // === Определяем месяц и год из первой строки ===
   const monthNamesRu: Record<string, number> = {
     'январ': 1, 'феврал': 2, 'март': 3, 'апрел': 4,
     'мая': 5, 'май': 5, 'июн': 6, 'июл': 7, 'август': 8,
@@ -109,37 +124,46 @@ export function parseGoogleSheetsCSV(csvText: string): ScheduleData {
         detectedMonth = val;
         const yearMatch = rowText.match(/20\d{2}/);
         if (yearMatch) detectedYear = parseInt(yearMatch[0]);
-        if (rows[i][0]) sheetTitle = rows[i][0];
+        if (rows[i][0] && rows[i][0].trim()) sheetTitle = rows[i][0].trim();
         break;
       }
     }
   }
 
-  // === Находим строку с числами месяца ===
+  // === Находим строку с числами дат (1..31) ===
+  // Таблица может иметь 2 или 3 служебных колонки (Имя, Должность, [Стаж])
   const dateMap: Record<number, string> = {};
+  let dataStartCol = 2; // минимум колонка C
 
   for (let ri = 0; ri < Math.min(rows.length, 10); ri++) {
     const row = rows[ri];
     let countNumbers = 0;
     const tempMap: Record<number, string> = {};
+    let firstNumCol = -1;
 
     for (let ci = 2; ci < row.length; ci++) {
       const cell = row[ci].replace(/['"]/g, '').trim();
       const num = parseInt(cell, 10);
+      // Строго число от 1 до 31
       if (!isNaN(num) && num >= 1 && num <= 31 && String(num) === cell) {
         countNumbers++;
+        if (firstNumCol === -1) firstNumCol = ci;
         const isoDate = `${detectedYear}-${String(detectedMonth).padStart(2, '0')}-${String(num).padStart(2, '0')}`;
         const d = new Date(isoDate);
-        if (!isNaN(d.getTime())) {
-          tempMap[ci] = isoDate;
-        }
+        if (!isNaN(d.getTime())) tempMap[ci] = isoDate;
       }
     }
 
     if (countNumbers >= 5) {
       Object.assign(dateMap, tempMap);
+      if (firstNumCol !== -1) dataStartCol = firstNumCol;
       break;
     }
+  }
+
+  // Если не нашли строку с датами — возвращаем пустой результат
+  if (Object.keys(dateMap).length === 0) {
+    return { employees: [], shifts: [], lastSync: new Date().toISOString(), sheetName: sheetTitle, month: detectedMonth, year: detectedYear };
   }
 
   // === Парсим сотрудников ===
@@ -149,9 +173,12 @@ export function parseGoogleSheetsCSV(csvText: string): ScheduleData {
 
   for (let ri = 1; ri < rows.length; ri++) {
     const row = rows[ri];
+    if (!row || row.length < 2) continue;
+
     const nameCell = (row[0] || '').trim();
     const roleCell = (row[1] || '').trim();
 
+    // Пропускаем строки-разделители и заголовки
     if (!isRoleCell(roleCell)) continue;
     if (!isEmployeeName(nameCell)) continue;
 
@@ -171,6 +198,7 @@ export function parseGoogleSheetsCSV(csvText: string): ScheduleData {
       };
       employeeMap.set(nameLower, emp);
     } else {
+      // Сотрудник с несколькими должностями
       if (roleCell && !emp.roles?.includes(roleCell)) {
         emp.roles = [...(emp.roles || []), roleCell];
       }
@@ -182,6 +210,7 @@ export function parseGoogleSheetsCSV(csvText: string): ScheduleData {
       }
     }
 
+    // Читаем смены по колонкам дат
     for (const [ciStr, isoDate] of Object.entries(dateMap)) {
       const ci = parseInt(ciStr);
       const cell = (row[ci] || '').trim();
@@ -202,6 +231,8 @@ export function parseGoogleSheetsCSV(csvText: string): ScheduleData {
       }
     }
   }
+
+  void dataStartCol;
 
   const employees: Employee[] = Array.from(employeeMap.values());
 
@@ -273,7 +304,6 @@ export function useDemoData(): ScheduleData {
 
 // ==================== SHEETS API ====================
 
-// Получаем список листов через Google Sheets API v4 (требует API Key)
 export async function fetchSheetListWithApiKey(
   sheetId: string,
   apiKey: string,
@@ -294,8 +324,6 @@ export async function fetchSheetListWithApiKey(
   });
 }
 
-// ==================== ЛИСТЫ ====================
-
 const MONTH_NAMES_RU = [
   'январь','февраль','март','апрель','май','июнь',
   'июль','август','сентябрь','октябрь','ноябрь','декабрь',
@@ -305,10 +333,8 @@ const MONTH_NAMES_RU_GEN = [
   'июля','августа','сентября','октября','ноября','декабря',
 ];
 
-// Парсим название листа — возвращаем { month, year } или null
 function parseSheetTitle(title: string): { month: number; year: number } | null {
   const lower = title.toLowerCase().trim();
-  // Форматы: «Февраль 2025», «февраль2025», «2025 февраль», «02.2025», «2025-02»
   const yearMatch = lower.match(/20(\d{2})/);
   const year = yearMatch ? parseInt('20' + yearMatch[1]) : null;
   if (!year) return null;
@@ -318,7 +344,6 @@ function parseSheetTitle(title: string): { month: number; year: number } | null 
       return { month: i + 1, year };
     }
   }
-  // Числовой формат 02.2025 или 2025-02
   const numMatch = lower.match(/(\d{1,2})[.\-\/]20\d{2}/) || lower.match(/20\d{2}[.\-\/](\d{1,2})/);
   if (numMatch) {
     const m = parseInt(numMatch[1]);
@@ -327,7 +352,6 @@ function parseSheetTitle(title: string): { month: number; year: number } | null 
   return null;
 }
 
-// Получаем список всех листов таблицы через gviz API
 export async function fetchSheetList(sheetId: string): Promise<{ gid: string; title: string; month?: number; year?: number }[]> {
   try {
     const url = `https://docs.google.com/spreadsheets/d/${sheetId}/feeds/worksheets/default/public/values?alt=json`;
@@ -337,23 +361,12 @@ export async function fetchSheetList(sheetId: string): Promise<{ gid: string; ti
     const entries = json?.feed?.entry ?? [];
     return entries.map((e: Record<string, unknown>) => {
       const title = (e['title'] as Record<string, unknown>)?.['$t'] as string ?? '';
-      const idStr = (e['id'] as Record<string, unknown>)?.['$t'] as string ?? '';
-      // GID находится в конце URL вида .../worksheets/default/public/values/od6
-      // Но нам нужен числовой gid — берём из link[@rel='...#cellsfeed']
       const links = (e['link'] as Record<string, unknown>[]) ?? [];
       let gid = '0';
       for (const link of links) {
         const href = link['href'] as string ?? '';
         const gidMatch = href.match(/gid=(\d+)/);
         if (gidMatch) { gid = gidMatch[1]; break; }
-      }
-      // Fallback: извлечь из id строки
-      if (gid === '0' && idStr) {
-        const parts = idStr.split('/');
-        const last = parts[parts.length - 1];
-        // Google использует od6, od7 и т.д. — конвертируем в числовой gid через формулу
-        // Проще использовать другой endpoint
-        gid = last === 'od6' ? '0' : last;
       }
       const parsed = parseSheetTitle(title);
       return { gid, title, month: parsed?.month, year: parsed?.year };
@@ -363,29 +376,6 @@ export async function fetchSheetList(sheetId: string): Promise<{ gid: string; ti
   }
 }
 
-// Альтернативный способ получения листов — через HTML страницу таблицы
-export async function fetchSheetListFromHtml(sheetId: string): Promise<{ gid: string; title: string; month?: number; year?: number }[]> {
-  try {
-    // Используем публичный JSON endpoint
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=`;
-    // Другой способ — парсим sheets metadata через экспорт
-    // Самый надёжный для публичных таблиц: пробуем gid 0, 1, 2... но это не масштабируется
-    // Используем spreadsheets metadata API без auth через публичный endpoint
-    const metaUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
-    const res = await fetch(metaUrl);
-    if (res.ok) {
-      // Таблица доступна, но список листов без API key не получить надёжно
-      // Возвращаем пустой массив — будем использовать прямой перебор gid
-      void url;
-      return [];
-    }
-    return [];
-  } catch {
-    return [];
-  }
-}
-
-// Найти gid листа по месяцу и году
 export async function findSheetGidByMonth(sheetId: string, month: number, year: number): Promise<string | null> {
   const sheets = await fetchSheetList(sheetId);
   if (sheets.length === 0) return null;

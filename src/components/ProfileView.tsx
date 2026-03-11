@@ -7,7 +7,7 @@ import { EmployeeCard } from './EmployeeCard';
 import { ReportsSection } from './ReportsSection';
 import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
-  saveTgLink, getEmpIdByTgId,
+  saveTgLink, getEmpIdByTgId, syncTgLink,
 } from '../utils/telegram';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -46,7 +46,8 @@ function toInputValue(d: Date) {
 interface SettingsSectionProps {
   sheetId: string; sheetGid: string;
   sheetsApiKey?: string;
-  onSave: (id: string, gid: string, apiKey?: string) => void;
+  appsScriptUrl?: string;
+  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string) => void;
   lastSync: string | null;
   isLoading: boolean; onRefresh: () => void;
   error: string | null;
@@ -56,13 +57,14 @@ interface SettingsSectionProps {
   isAdmin?: boolean;
 }
 const SettingsSection: React.FC<SettingsSectionProps> = ({
-  sheetId, sheetGid, sheetsApiKey = '', onSave, lastSync, isLoading, onRefresh, error,
+  sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', onSave, lastSync, isLoading, onRefresh, error,
   fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false,
 }) => {
   const { isDark, setTheme } = useTheme();
   const [localId, setLocalId]         = useState(sheetId);
   const [localGid, setLocalGid]       = useState(sheetGid);
   const [localApiKey, setLocalApiKey] = useState(sheetsApiKey);
+  const [localScript, setLocalScript] = useState(appsScriptUrl);
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
 
@@ -75,7 +77,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     const id = localId.includes('spreadsheets/d/')
       ? localId.split('spreadsheets/d/')[1].split('/')[0]
       : localId.trim();
-    onSave(id, localGid, localApiKey.trim() || undefined);
+    onSave(id, localGid, localApiKey.trim() || undefined, localScript.trim() || undefined);
   };
 
   const handleFakeDateToggle = (v: boolean) => {
@@ -152,6 +154,23 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
                 onChange={e => setLocalApiKey(e.target.value)}
                 placeholder="AIzaSy..."
                 className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 ${inp}`}
+              />
+            </div>
+            {/* Apps Script URL */}
+            <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-violet-50 border-violet-200'}`}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-sm">⚡</span>
+                <span className={`text-xs font-bold ${isDark ? 'text-violet-400' : 'text-violet-700'}`}>Apps Script URL</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${isDark ? 'bg-slate-600 text-slate-400' : 'bg-violet-100 text-violet-500'}`}>необязательно</span>
+              </div>
+              <p className={`text-[11px] mb-2 ${isDark ? 'text-slate-400' : 'text-violet-600'}`}>
+                Нужен для навигации по месяцам и синхронизации уведомлений.
+              </p>
+              <input
+                type="text" value={localScript}
+                onChange={e => setLocalScript(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-400 ${inp}`}
               />
             </div>
             <button
@@ -481,7 +500,8 @@ interface ProfileViewProps {
   fakeDate: Date | null;
   sheetId: string; sheetGid: string;
   sheetsApiKey?: string;
-  onSave: (id: string, gid: string, apiKey?: string) => void;
+  appsScriptUrl?: string;
+  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string) => void;
   lastSync: string | null;
   isLoading: boolean; onRefresh: () => void;
   error: string | null;
@@ -491,7 +511,7 @@ interface ProfileViewProps {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
-  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '',
+  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '',
   onSave, lastSync, isLoading, onRefresh, error,
   onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
 }) => {
@@ -533,7 +553,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setLinkedEmpId(id);
     onLinkedEmpChange(id);
     localStorage.setItem(STORAGE_LINKED_ID, id);
-    if (tgId) saveTgLink(tgId, id);
+    if (tgId) { saveTgLink(tgId, id); syncTgLink(name, tgId); }
     const displayName = tgUser ? getTgFullName(tgUser) : name;
     setTgName(displayName);
     localStorage.setItem(STORAGE_TG_NAME, displayName);
@@ -641,6 +661,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <SettingsSection
                 sheetId={sheetId} sheetGid={sheetGid}
                 sheetsApiKey={sheetsApiKey}
+                appsScriptUrl={appsScriptUrl}
                 onSave={onSave} lastSync={lastSync}
                 isLoading={isLoading} onRefresh={onRefresh}
                 error={error} fakeDate={fakeDate}
@@ -723,6 +744,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         <SettingsSection
           sheetId={sheetId} sheetGid={sheetGid}
           sheetsApiKey={sheetsApiKey}
+          appsScriptUrl={appsScriptUrl}
           onSave={onSave} lastSync={lastSync}
           isLoading={isLoading} onRefresh={onRefresh}
           error={error} fakeDate={fakeDate}
