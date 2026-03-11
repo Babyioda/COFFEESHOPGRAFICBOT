@@ -5,6 +5,17 @@ import {
 } from '../types/schedule';
 import { useTheme } from '../context/ThemeContext';
 
+const STORAGE_EMP_NOTES = 'sf_admin_emp_notes';
+function loadEmpNotes(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(STORAGE_EMP_NOTES) || '{}'); } catch { return {}; }
+}
+function saveEmpNote(empId: string, note: string) {
+  const notes = loadEmpNotes();
+  if (note.trim()) notes[empId] = note.trim();
+  else delete notes[empId];
+  localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(notes));
+}
+
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
@@ -33,16 +44,20 @@ interface EmployeeCardProps {
   year: number;
   today: Date;
   isFriend: boolean;
+  isAdmin?: boolean;
   onToggleFriend: (id: string) => void;
   onClose: () => void;
 }
 
 export const EmployeeCard: React.FC<EmployeeCardProps> = ({
-  emp, data, month, year, today, isFriend, onToggleFriend, onClose,
+  emp, data, month, year, today, isFriend, isAdmin = false, onToggleFriend, onClose,
 }) => {
   const { isDark } = useTheme();
   const [cardMonth, setCardMonth] = useState(month);
   const [cardYear, setCardYear]   = useState(year);
+  const [showNoteEditor, setShowNoteEditor] = useState(false);
+  const [noteText, setNoteText] = useState(() => loadEmpNotes()[emp.id] || '');
+  const [savedNote, setSavedNote] = useState(() => loadEmpNotes()[emp.id] || '');
 
   const dept    = emp.department ?? getDepartment(emp.role);
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
@@ -128,8 +143,53 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 
                 </div>
               </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-xl active:scale-95">×</button>
+              <div className="flex items-center gap-2">
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowNoteEditor(v => !v)}
+                    className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-base active:scale-95"
+                    title="Добавить заметку"
+                  >✏️</button>
+                )}
+                <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-xl active:scale-95">×</button>
+              </div>
             </div>
+
+            {/* Заметка администратора */}
+            {savedNote && !showNoteEditor && (
+              <div className="mt-3 bg-amber-400/20 border border-amber-400/40 rounded-2xl px-3 py-2 flex items-start gap-2">
+                <span className="text-amber-300 text-sm">💬</span>
+                <p className="text-amber-100 text-xs leading-relaxed flex-1">{savedNote}</p>
+              </div>
+            )}
+
+            {/* Редактор заметки */}
+            {showNoteEditor && (
+              <div className="mt-3 bg-white/10 rounded-2xl p-3">
+                <p className="text-white/60 text-xs font-semibold mb-2">📝 Заметка о сотруднике</p>
+                <textarea
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  placeholder="Например: работает 0.5 ставки, особые условия..."
+                  className="w-full bg-white/10 border border-white/20 rounded-xl text-white text-xs p-2 resize-none outline-none placeholder-white/30 focus:border-white/40"
+                  rows={3}
+                />
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => {
+                      saveEmpNote(emp.id, noteText);
+                      setSavedNote(noteText.trim());
+                      setShowNoteEditor(false);
+                    }}
+                    className="flex-1 bg-white/20 hover:bg-white/30 text-white text-xs font-semibold py-2 rounded-xl active:scale-95 transition-all"
+                  >Сохранить</button>
+                  <button
+                    onClick={() => { setShowNoteEditor(false); setNoteText(savedNote); }}
+                    className="px-4 bg-white/10 text-white/60 text-xs py-2 rounded-xl active:scale-95"
+                  >Отмена</button>
+                </div>
+              </div>
+            )}
 
             {/* Смена сегодня */}
             {todayShift !== 'off' && (

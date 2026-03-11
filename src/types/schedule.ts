@@ -86,7 +86,7 @@ export interface DepartmentConfig {
 
 export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
   power: {
-    label: 'Власть',
+    label: 'Менеджер',
     icon: '👑',
     color: '#b45309',
     bgColor: 'bg-amber-50',
