@@ -7,6 +7,7 @@ interface MonthViewProps {
   month: number;
   year: number;
   fakeDate?: Date | null;
+  linkedEmpId?: string | null;
 }
 
 function formatDate(y: number, m: number, d: number): string {
@@ -266,7 +267,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
 };
 
 // ── Основной компонент ────────────────────────────────────────────────
-export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDate }) => {
+export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDate, linkedEmpId }) => {
   const { isDark } = useTheme();
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
@@ -282,6 +283,13 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
     return data.shifts
       .filter(s => s.date === dateStr && s.shift !== 'off')
       .map(s => s.shift);
+  };
+
+  const getMyShift = (day: number): ShiftType | null => {
+    if (!linkedEmpId) return null;
+    const dateStr = formatDate(year, month, day);
+    const entry = data.shifts.find(s => s.employeeId === linkedEmpId && s.date === dateStr);
+    return entry?.shift ?? 'off';
   };
 
   const calCell = isDark ? CAL_CELL_DARK : CAL_CELL;
@@ -304,6 +312,7 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
         </h2>
         <p className={`text-xs mb-3 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
           Нажмите на день чтобы увидеть кто работает
+          {linkedEmpId && <span className="ml-1">· <span className="text-indigo-400 font-semibold">● твои смены</span></span>}
         </p>
         {/* Легенда */}
         <div className="flex flex-wrap gap-1.5">
@@ -345,19 +354,21 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
           ))}
 
           {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-            const dateStr = formatDate(year, month, day);
+            const dateStr  = formatDate(year, month, day);
             const dayShifts = getShiftsForDay(day);
-            const dominant = getDominantShift(dayShifts.length ? dayShifts : ['off']);
+            const dominant  = getDominantShift(dayShifts.length ? dayShifts : ['off']);
             const hasShifts = dayShifts.length > 0;
-            const isToday = dateStr === todayStr;
-            const dow = new Date(year, month - 1, day).getDay();
+            const isToday   = dateStr === todayStr;
+            const dow       = new Date(year, month - 1, day).getDay();
             const isWeekend = dow === 0 || dow === 6;
+            const myShift   = getMyShift(day);
+            const isMyShift = myShift !== null && myShift !== 'off';
 
             return (
               <button
                 key={day}
                 onClick={() => setSelectedDay(day)}
-                className={`aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold border-2 transition-all active:scale-95 cursor-pointer
+                className={`aspect-square flex flex-col items-center justify-center rounded-xl text-xs font-bold border-2 transition-all active:scale-95 cursor-pointer relative
                   ${isToday ? 'ring-2 ring-indigo-500 ring-offset-1' : ''}
                   ${hasShifts ? calCell[dominant] : isDark
                     ? `border-slate-700 ${isWeekend ? 'text-rose-500/50' : 'text-slate-600'}`
@@ -370,6 +381,16 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
                     {SHIFT_CONFIG[dominant].shortLabel}
                     {dayShifts.length > 1 && <span className="opacity-60">+{dayShifts.length - 1}</span>}
                   </span>
+                )}
+                {/* Индикатор личной смены */}
+                {isMyShift && (
+                  <div
+                    className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 flex items-center justify-center"
+                    style={{
+                      backgroundColor: SHIFT_CONFIG[myShift].color,
+                      borderColor: isDark ? '#0f172a' : '#ffffff',
+                    }}
+                  />
                 )}
               </button>
             );
