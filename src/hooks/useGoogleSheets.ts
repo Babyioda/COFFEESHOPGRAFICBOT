@@ -57,18 +57,18 @@ function isRoleCell(cell: string): boolean {
   return true;
 }
 
-export function parseShiftValue(raw: string): ShiftType {
+export function parseShiftValue(raw: string): { type: ShiftType; hours?: number } {
   const v = raw.trim().toLowerCase();
-  if (!v || v === '-' || v === '—' || v === 'в' || v === 'вых' || v === 'о') return 'off';
-  if (v === 'с' || v === 'c' || v === 'сут' || v === 'сутки') return 'daily';
-  if (v.startsWith('от') || v === 'отп' || v === 'vacation') return 'vacation';
-  if (v === 'б' || v === 'бл' || v === 'болен' || v === 'больн' || v === 'больничный' || v === 'sick') return 'sick';
-  if (v === 'д' || v === 'd' || v === 'день' || v === 'дн' || v === 'дневная') return 'day';
-  if (v === 'н' || v === 'n' || v === 'ночь' || v === 'ноч' || v === 'ночная') return 'night';
-  // Числа (часы смены) — считаем как рабочий день
+  if (!v || v === '-' || v === '—' || v === 'в' || v === 'вых' || v === 'о') return { type: 'off' };
+  if (v === 'с' || v === 'c' || v === 'сут' || v === 'сутки') return { type: 'daily' };
+  if (v.startsWith('от') || v === 'отп' || v === 'vacation') return { type: 'vacation' };
+  if (v === 'б' || v === 'бл' || v === 'болен' || v === 'больн' || v === 'больничный' || v === 'sick') return { type: 'sick' };
+  if (v === 'д' || v === 'd' || v === 'день' || v === 'дн' || v === 'дневная') return { type: 'day' };
+  if (v === 'н' || v === 'n' || v === 'ночь' || v === 'ноч' || v === 'ночная') return { type: 'night' };
+  // Числа — это НЕ смена, просто часы. Блокируем отображение смены.
   const num = parseFloat(v);
-  if (!isNaN(num) && num > 0) return 'day';
-  return 'off';
+  if (!isNaN(num) && num > 0) return { type: 'off', hours: num };
+  return { type: 'off' };
 }
 
 function parseCSVLine(line: string): string[] {
@@ -214,20 +214,26 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     for (const [ciStr, isoDate] of Object.entries(dateMap)) {
       const ci = parseInt(ciStr);
       const cell = (row[ci] || '').trim();
-      const shift = parseShiftValue(cell);
-
-      if (shift === 'off') {
-        const hasWorking = shifts.some(s => s.employeeId === emp!.id && s.date === isoDate && s.shift !== 'off');
-        if (hasWorking) continue;
-      }
+      const parsed = parseShiftValue(cell);
+      const shift = parsed.type;
+      const hours = parsed.hours;
 
       const existingIdx = shifts.findIndex(s => s.employeeId === emp!.id && s.date === isoDate);
+
       if (existingIdx !== -1) {
-        if (shift !== 'off') {
+        const existing = shifts[existingIdx];
+        // Числа (hours > 0) — явно блокируют смену, перезаписываем на off
+        if (hours && hours > 0) {
+          shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift: 'off', role: roleCell || undefined };
+        }
+        // Рабочая смена перезаписывает выходной (но не числа — они уже обработаны выше)
+        else if (shift !== 'off' && existing.shift === 'off') {
           shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
         }
+        // Рабочая смена не перезаписывает другую рабочую
       } else {
-        shifts.push({ employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined });
+        // Числа = выходной (off), не добавляем как рабочую смену
+        shifts.push({ employeeId: emp!.id, date: isoDate, shift: hours ? 'off' : shift, role: roleCell || undefined });
       }
     }
   }
