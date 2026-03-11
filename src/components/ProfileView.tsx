@@ -766,10 +766,40 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       )}
 
       {activeSection === 'bugreport' && (
-        <div className={`rounded-2xl p-8 border shadow-sm text-center ${card}`}>
-          <p className="text-4xl mb-3">🐛</p>
-          <p className={`font-bold text-base mb-1 ${lbl}`}>Баг-репорт</p>
-          <p className={`text-sm ${sub}`}>Форма для сообщений об ошибках появится здесь</p>
+        <div className={`rounded-2xl p-5 border shadow-sm ${card}`}>
+          <div className="text-center mb-5">
+            <p className="text-4xl mb-2">🐛</p>
+            <p className={`font-bold text-base mb-1 ${lbl}`}>Обратная связь</p>
+            <p className={`text-sm ${sub}`}>Нашёл ошибку или есть идея? Напиши нам!</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <a
+              href="https://t.me/silaysilaysilay"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 transition-colors"
+            >
+              <span className="text-2xl">🐞</span>
+              <div className="flex-1 text-left">
+                <p className="text-white font-semibold text-sm">Баги и ошибки</p>
+                <p className="text-red-100 text-xs">@silaysilaysilay</p>
+              </div>
+              <span className="text-white text-lg">→</span>
+            </a>
+            <a
+              href="https://t.me/milkaaasss"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 transition-colors"
+            >
+              <span className="text-2xl">💡</span>
+              <div className="flex-1 text-left">
+                <p className="text-white font-semibold text-sm">Идеи и предложения</p>
+                <p className="text-indigo-100 text-xs">@milkaaasss</p>
+              </div>
+              <span className="text-white text-lg">→</span>
+            </a>
+          </div>
         </div>
       )}
     </div>
