@@ -79,7 +79,13 @@ export function ensureAnonymousAuth(): Promise<string> {
     // if no user after subscription, try signInAnonymously
     if (!auth.currentUser) {
       signInAnonymously(auth).catch((err) => {
-        console.error('[Firebase] Failed to sign in anonymously:', err);
+        // common failure: anonymous auth not enabled in Firebase project
+        if (err && err.code === 'auth/configuration-not-found') {
+          console.warn('[Firebase] Anonymous auth appears to be disabled in the Firebase console.');
+          console.warn('           Go to Firebase → Authentication → Sign-in method and enable "Anonymous".');
+        } else {
+          console.error('[Firebase] Failed to sign in anonymously:', err);
+        }
         // ignore — onAuthStateChanged will catch errors too
       });
     }
@@ -88,6 +94,47 @@ export function ensureAnonymousAuth(): Promise<string> {
 
 export function getCurrentUid(): string | null {
   return auth.currentUser ? auth.currentUser.uid : null;
+}
+
+/**
+ * Comprehensive Firebase connection test — checks auth, Firestore, and various collections.
+ * Logs detailed results to console for debugging.
+ */
+export async function testConnection(): Promise<void> {
+  console.log('🔍 [Firebase] Starting comprehensive connection test...');
+  
+  try {
+    // 1. Check current auth state
+    console.log('📝 Current user:', auth.currentUser);
+    console.log('📝 Current UID:', getCurrentUid());
+    
+    // 2. Test Firestore connectivity with multiple collections
+    const collections_to_test = [
+      'employee_notes',
+      'shift_notes',
+      'employee_rules',
+      'shifts',
+      'shift_edits',
+      'emp_notes',
+      'emp_rules',
+      'emp_prefs',
+      'user_links'
+    ];
+    
+    for (const colName of collections_to_test) {
+      try {
+        const snap = await getDocs(collection(db, colName));
+        console.log(`✅ [Firebase] ${colName}: ${snap.size} documents`);
+      } catch (err: any) {
+        console.error(`❌ [Firebase] ${colName} error:`, err.code, err.message);
+      }
+    }
+    
+    console.log('✨ [Firebase] Test completed successfully!');
+  } catch (err) {
+    console.error('❌ [Firebase] testConnection critical error:', err);
+    throw err;
+  }
 }
 
 // Shifts
@@ -341,5 +388,211 @@ export async function deleteEmployeeRules(employeeId: string) {
     console.log(`[Firebase] Deleted ${snap.docs.length} employee rules for ${employeeId}`);
   } catch (err) {
     console.error('[Firebase] Failed to delete employee rules:', err);
+  }
+}
+
+// ======== Shift Edits (synchronized from localStorage) ========
+interface ShiftEditDoc {
+  empId: string;
+  date: string;
+  customStart?: string;
+  customEnd?: string;
+  note?: string;
+  updatedAt?: any;
+}
+
+export async function setShiftEdit(edit: ShiftEditDoc): Promise<void> {
+  try {
+    const docId = `${edit.empId}_${edit.date}`;
+    const docRef = doc(db, 'shift_edits', docId);
+    await setDoc(docRef, {
+      ...edit,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Shift edit saved:', docId);
+  } catch (err) {
+    console.error('[Firebase] Failed to save shift edit:', err);
+    throw err;
+  }
+}
+
+export async function deleteShiftEditDoc(empId: string, date: string): Promise<void> {
+  try {
+    const docId = `${empId}_${date}`;
+    const docRef = doc(db, 'shift_edits', docId);
+    await deleteDoc(docRef);
+    console.log('[Firebase] Shift edit deleted:', docId);
+  } catch (err) {
+    console.error('[Firebase] Failed to delete shift edit:', err);
+  }
+}
+
+export async function fetchShiftEdits(): Promise<ShiftEditDoc[]> {
+  try {
+    const snap = await getDocs(collection(db, 'shift_edits'));
+    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as ShiftEditDoc));
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch shift edits:', err);
+    return [];
+  }
+}
+
+// ======== Employee Notes (synchronized from localStorage) ========
+interface EmpNoteDoc {
+  empId: string;
+  note: string;
+  updatedAt?: any;
+}
+
+export async function setEmpNote(empId: string, note: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'emp_notes', empId);
+    if (note.trim() === '') {
+      await deleteDoc(docRef);
+      console.log('[Firebase] Employee note deleted:', empId);
+    } else {
+      await setDoc(docRef, {
+        empId,
+        note,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      console.log('[Firebase] Employee note saved:', empId);
+    }
+  } catch (err) {
+    console.error('[Firebase] Failed to save employee note:', err);
+    throw err;
+  }
+}
+
+export async function fetchEmpNotes(): Promise<EmpNoteDoc[]> {
+  try {
+    const snap = await getDocs(collection(db, 'emp_notes'));
+    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpNoteDoc));
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch employee notes:', err);
+    return [];
+  }
+}
+
+// ======== Employee Rules (synchronized from localStorage) ========
+interface EmpRuleDoc {
+  empId: string;
+  hours: { start: string; end: string };
+  updatedAt?: any;
+}
+
+export async function setEmpRule(empId: string, hours: { start: string; end: string }): Promise<void> {
+  try {
+    const docRef = doc(db, 'emp_rules', empId);
+    if (hours.start === '' || hours.end === '') {
+      await deleteDoc(docRef);
+      console.log('[Firebase] Employee rule deleted:', empId);
+    } else {
+      await setDoc(docRef, {
+        empId,
+        hours,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      console.log('[Firebase] Employee rule saved:', empId);
+    }
+  } catch (err) {
+    console.error('[Firebase] Failed to save employee rule:', err);
+    throw err;
+  }
+}
+
+export async function fetchEmpRules(): Promise<EmpRuleDoc[]> {
+  try {
+    const snap = await getDocs(collection(db, 'emp_rules'));
+    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpRuleDoc));
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch employee rules:', err);
+    return [];
+  }
+}
+
+// ======== Employee Preferences (Telegram visibility + Birthday) ========
+export interface EmpPrefsDoc {
+  empId: string;
+  showTelegram?: boolean;
+  birthday?: string; // MM-DD
+  updatedAt?: any;
+}
+
+export async function setEmpPrefs(prefs: EmpPrefsDoc): Promise<void> {
+  try {
+    const docRef = doc(db, 'emp_prefs', prefs.empId);
+    await setDoc(docRef, {
+      ...prefs,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Employee prefs saved:', prefs.empId);
+  } catch (err) {
+    console.error('[Firebase] Failed to save employee prefs:', err);
+    throw err;
+  }
+}
+
+export async function fetchEmpPrefs(empId: string): Promise<EmpPrefsDoc | null> {
+  try {
+    const snap = await getDocs(query(collection(db, 'emp_prefs'), where('empId', '==', empId)));
+    if (snap.empty) return null;
+    return snap.docs[0].data() as EmpPrefsDoc;
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch employee prefs:', err);
+    return null;
+  }
+}
+
+export async function fetchAllEmpPrefs(): Promise<EmpPrefsDoc[]> {
+  try {
+    const snap = await getDocs(collection(db, 'emp_prefs'));
+    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch all employee prefs:', err);
+    return [];
+  }
+}
+
+// ======== User-Employee Link (current user → employee) ========
+export interface UserLinkDoc {
+  uid: string;
+  empId: string;
+  updatedAt?: any;
+}
+
+export async function setUserLink(uid: string, empId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'user_links', uid);
+    await setDoc(docRef, {
+      uid,
+      empId,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] User link saved:', { uid, empId });
+  } catch (err) {
+    console.error('[Firebase] Failed to save user link:', err);
+    throw err;
+  }
+}
+
+export async function getUserLink(uid: string): Promise<string | null> {
+  try {
+    const snap = await getDocs(query(collection(db, 'user_links'), where('uid', '==', uid)));
+    if (snap.empty) return null;
+    return snap.docs[0].data().empId;
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch user link:', err);
+    return null;
+  }
+}
+
+export async function deleteUserLink(uid: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'user_links', uid);
+    await deleteDoc(docRef);
+    console.log('[Firebase] User link deleted:', uid);
+  } catch (err) {
+    console.error('[Firebase] Failed to delete user link:', err);
   }
 }

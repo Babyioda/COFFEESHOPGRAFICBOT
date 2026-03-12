@@ -170,6 +170,9 @@ export interface Employee {
   color: string;
   rowIndex: number;   // номер строки в таблице (для отладки)
   department?: Department | null;
+  showTelegram?: boolean;  // показывать ли кнопку Telegram на странице сотрудника
+  birthday?: string;       // день рождения в формате MM-DD (без года)
+  tgUsername?: string;     // @username в Telegram
 }
 
 export interface ShiftEntry {

@@ -77,6 +77,14 @@ function getDominantShift(shifts: ShiftType[]): ShiftType {
   return 'off';
 }
 
+// Get employees with birthdays on a given date (MM-DD format)
+function getEmployeesBirthdayToday(employees: Employee[], date: Date): Employee[] {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const todayMMDD = `${month}-${day}`;
+  return employees.filter(emp => emp.birthday === todayMMDD);
+}
+
 // ── Edit Shift Modal ────────────────────────────────────────────────
 interface EditShiftModalProps {
   emp: Employee;
@@ -297,10 +305,12 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
   const working: {
     emp: Employee; name: string; role: string; color: string;
     shift: ShiftType; dept: Department; isMe: boolean; hours?: number;
+    birthday?: boolean;
   }[] = [];
   const absent: {
     emp: Employee; name: string; role: string; color: string;
     shift: ShiftType; isMe: boolean; hours?: number;
+    birthday?: boolean;
   }[] = [];
 
   data.employees.forEach(emp => {
@@ -317,6 +327,18 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
       absent.push({ emp, name: emp.name, role, color, shift, isMe, hours });
     } else {
       working.push({ emp, name: emp.name, role, color, shift, dept, isMe, hours });
+    }
+  });
+
+  // добавить именинников даже если не работают
+  const birthdayEmps = getEmployeesBirthdayToday(data.employees, date);
+  birthdayEmps.forEach(emp => {
+    const already = working.some(w => w.emp.id === emp.id) || absent.some(a => a.emp.id === emp.id);
+    if (!already) {
+      const color = getDeptColorByRole(emp.role, emp.color);
+      const dept = getDepartment(emp.role) ?? emp.department ?? 'kitchen';
+      const isMe = emp.id === linkedEmpId;
+      working.push({ emp, name: emp.name, role: emp.role, color, shift: 'off', dept, isMe, birthday: true });
     }
   });
 
@@ -424,6 +446,11 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
                                     {w.isMe && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-100 px-1.5 py-0.5 rounded-full flex-shrink-0">Я</span>}
+                                    {w.birthday && (
+                                      <span className="text-[10px] font-bold text-pink-600 bg-pink-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                        🎂 именинник
+                                      </span>
+                                    )}
                                     {hasCustomTime && (
                                       <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
                                         {timeStart}–{timeEnd}
@@ -465,6 +492,62 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                       </div>
                     );
                   })}
+                  {/* Дополнительная секция для именинников без смен */}
+                  {group.filter(w => w.birthday && w.shift === 'off' && !w.hours).length > 0 && (
+                    <div key="birthdays">
+                      <div className={`px-4 py-1.5 flex items-center gap-2 bg-pink-100`}> 
+                        <span className="text-sm">🎂</span>
+                        <span className="text-xs font-semibold">Именинник</span>
+                      </div>
+                      <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-gray-50'}`}>
+                        {group.filter(w => w.birthday && w.shift === 'off' && !w.hours).map((w, i) => {
+                          const empNote = getNote(w.emp.id);
+                          const shiftNote = getShiftNote(w.emp.id);
+                          return (
+                            <div key={i} className={`flex items-start gap-3 px-4 py-2.5 ${w.isMe ? isDark ? 'bg-indigo-900/30' : 'bg-indigo-50' : ''}`}>
+                              <div
+                                className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm mt-0.5"
+                                style={{ backgroundColor: w.color }}
+                              >
+                                {w.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
+                                  {w.isMe && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-100 px-1.5 py-0.5 rounded-full flex-shrink-0">Я</span>}
+                                  <span className="text-[10px] font-bold text-pink-600 bg-pink-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                    🎂 именинник
+                                  </span>
+                                </div>
+                                <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>{w.role}</p>
+                                {empNote && (
+                                  <p className={`text-xs mt-0.5 rounded-lg px-2 py-0.5 font-medium ${isDark ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
+                                    💬 {empNote}
+                                  </p>
+                                )}
+                                {shiftNote && (
+                                  <p className={`text-xs mt-0.5 rounded-lg px-2 py-0.5 font-medium ${isDark ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
+                                    📌 {shiftNote}
+                                  </p>
+                                )}
+                              </div>
+                              {/* Карандаш — только для администраторов */}
+                              {isAdmin && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); setEditingShift({ emp: w.emp, shift: w.shift }); }}
+                                  className={`w-7 h-7 rounded-full flex items-center justify-center text-sm transition-all active:scale-95 flex-shrink-0 mt-0.5 ${
+                                    isDark ? 'bg-slate-700 hover:bg-slate-600 text-slate-400' : 'bg-gray-100 hover:bg-gray-200 text-gray-400'
+                                  } ${(empNote || shiftNote) ? isDark ? '!bg-amber-900/40 !text-amber-400' : '!bg-amber-100 !text-amber-600' : ''}`}
+                                >
+                                  ✏️
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   {/* Дополнительная секция для записей, где есть только часы (shift==='off') */}
                   {group.filter(w => w.shift === 'off' && w.hours).length > 0 && (
                     <div key="hours">
@@ -509,11 +592,11 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                               </div>
                             </div>
                           );
-                        })}
+                        })}  
                       </div>
                     </div>
                   )}
-</div>
+                </div>
               );
             })}
 
@@ -862,6 +945,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             const isWeekend = dow === 0 || dow === 6;
             const myTimes   = SHIFT_TIMES[myShift];
 
+            // Get birthday celebrants for this day
+            const birthdayCelebrants = getEmployeesBirthdayToday(data.employees, new Date(year, month-1, day));
+
             const myDeptColor = myRole ? getDeptColorByRole(myRole, '#6366f1') : '#6366f1';
             const isMyWorking = !!myHours || myShift === 'daily' || myShift === 'day' || myShift === 'night';
 
@@ -925,6 +1011,11 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                 {/* Индикатор правки администратора */}
                 {isAdmin && myCustom && (
                   <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
+                )}
+
+                {/* Birthday indicator */}
+                {birthdayCelebrants.length > 0 && (
+                  <div className="absolute top-0.5 left-0.5 text-xs">🎂</div>
                 )}
 
                 <span className={`text-[12px] font-bold leading-tight ${isWeekend && !isMyShift ? 'text-rose-400' : ''}`}>{day}</span>

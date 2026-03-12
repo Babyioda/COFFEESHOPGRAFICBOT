@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ShiftsView } from './components/ShiftsView';
 import { ProfileView } from './components/ProfileView';
 import { getTgUserId } from './utils/telegram';
+import { ScheduleData, Employee } from './types/schedule';
 
 const ADMIN_TG_IDS = [783948887, 6147055724];
 import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey } from './hooks/useGoogleSheets';
-import { ScheduleData } from './types/schedule';
+import { getEmpPrefs, getLinkedEmpId, saveLinkedEmpId } from './utils/adminEdits';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 type TabId = 'shifts' | 'profile';
@@ -33,7 +34,7 @@ function AppInner() {
   const { isDark } = useTheme();
 
   const [activeTab, setActiveTab]   = useState<TabId>(() =>
-    localStorage.getItem('sf_linked_emp_id') ? 'shifts' : 'profile'
+    getLinkedEmpId() ? 'shifts' : 'profile'
   );
   const [sheetId, setSheetId]       = useState<string>(() => localStorage.getItem(STORAGE_KEY_ID) || DEFAULT_SHEET_ID);
   const [sheetGid, setSheetGid]     = useState<string>(() => localStorage.getItem(STORAGE_KEY_GID) || DEFAULT_SHEET_GID);
@@ -57,12 +58,23 @@ function AppInner() {
   const sheetMapLoaded              = useRef(false);
 
   const [liveData, setLiveData]     = useState<ScheduleData | null>(null);
+
+  const handleUpdateEmployee = useCallback((emp: Employee) => {
+    setLiveData(prev => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        employees: prev.employees.map(e => e.id === emp.id ? emp : e),
+      };
+      return next;
+    });
+  }, []);
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveError, setLiveError]   = useState<string | null>(null);
   const [lastSync, setLastSync]     = useState<string | null>(null);
 
   const [linkedEmpId, setLinkedEmpId] = useState<string | null>(
-    () => localStorage.getItem('sf_linked_emp_id'),
+    () => getLinkedEmpId(),
   );
 
   const [fakeDate, setFakeDate] = useState<Date | null>(() => {
@@ -161,6 +173,16 @@ function AppInner() {
         parsed = parseGoogleSheetsCSV(text);
       }
 
+      // merge any stored prefs
+      const prefs = parsed.employees.map(emp => {
+        const p = getEmpPrefs(emp.id);
+        if (p) {
+          if (p.showTelegram !== undefined) emp.showTelegram = p.showTelegram;
+          if (p.birthday) emp.birthday = p.birthday;
+        }
+        return emp;
+      });
+      parsed.employees = prefs;
       dataCache.set(cacheKey, parsed);
       setLiveData(parsed);
       setLastSync(new Date().toISOString());
@@ -335,11 +357,13 @@ function AppInner() {
             onFakeDateChange={handleFakeDateChange}
             onLinkedEmpChange={(id) => {
               setLinkedEmpId(id);
+              saveLinkedEmpId(id);
               if (id) setActiveTab('shifts');
             }}
             onMonthChange={handleMonthChange}
             sheetsApiKey={sheetsApiKey}
             appsScriptUrl={appsScriptUrl}
+            onEmployeeUpdate={handleUpdateEmployee}
           />
         )}
       </main>

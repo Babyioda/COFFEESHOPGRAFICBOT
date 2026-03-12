@@ -149,7 +149,6 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   const divBorder = isDark ? 'border-slate-700' : 'border-gray-50';
 
   const REPORT_TYPES: { id: ReportType; label: string; icon: string; desc: string }[] = [
-    { id: 'shifts',  icon: '📅', label: 'Количество смен',   desc: 'Сколько смен за выбранный период' },
     { id: 'hours',   icon: '⏱️', label: 'Отработанные часы', desc: 'Суммарные часы за период' },
     { id: 'income',  icon: '💰', label: 'Доход',             desc: 'Зарплата по ставке должности' },
     { id: 'revenue', icon: '📈', label: 'Подсчёт выручки',   desc: '2.5% от суммы выручки' },
@@ -254,7 +253,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       });
     }
 
-    const activeFilter: ShiftFilter = reportType === 'shifts' ? shiftFilter : 'all';
+    const activeFilter: ShiftFilter = shiftFilter; // filter applies for hours/income reports
     const filtered = activeFilter === 'all'
       ? myShifts
       : myShifts.filter(s => s.shift === activeFilter);
@@ -283,7 +282,8 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       selectedRole: rateObj?.role ?? '',
       totalShifts: filtered.length,
       countByType,
-      totalHours: reportType === 'shifts' ? filteredHours : totalHours,
+      totalHours,
+
       income: totalHours * rate,
       shifts: filtered,
       includeFuture,
@@ -714,10 +714,10 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
             )}
 
             {/* ─── ФОРМА СМЕН/ЧАСОВ/ДОХОДА ─── */}
-            {(reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
-              <>
-                {/* Фильтр по типу смены — только для «Смены» */}
-                {reportType === 'shifts' && (
+            {(reportType === 'hours' || reportType === 'income') && (
+              <>    
+                {/* Фильтр по типу смены — применяется к часам/доходу */}
+                {(reportType === 'hours' || reportType === 'income') && (
                   <div>
                     <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Тип смен</p>
                     <div className="grid grid-cols-2 gap-2">
@@ -736,10 +736,10 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                       ))}
                     </div>
                   </div>
-                )}
+                )}   
 
-                {/* Период — только для смен/часов/дохода */}
-                {(reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
+                {/* Период — только для часов/дохода */}
+                {(reportType === 'hours' || reportType === 'income') && (
                   <div>
                     <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Период</p>
                     <div className="grid grid-cols-2 gap-2 mb-2">
@@ -874,7 +874,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                   Создать отчёт →
                 </button>
 
-                {!linkedEmpId && (reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
+                {!linkedEmpId && (reportType === 'hours' || reportType === 'income') && (
                   <p className={`text-xs text-center ${sub}`}>
                     ⚠️ Сначала привяжи аккаунт в профиле
                   </p>
@@ -903,7 +903,10 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
               : `${r.totalShifts} смен`;
             let subText: string;
             if (r.type === 'revenue') {
-              subText = `Выручка: ${(r.revenueInput ?? 0).toLocaleString('ru-RU')} ₽`;
+              const inputVal = (r.revenueInput ?? 0).toLocaleString('ru-RU');
+              const resultVal = (r.revenueResult ?? 0).toLocaleString('ru-RU');
+              // show both total revenue and computed share when collapsed
+              subText = `Выручка: ${inputVal} ₽ · 2.5% = ${resultVal} ₽`;
             } else if (r.type === 'carts') {
               subText = `${r.cartsInput} тележек`;
             } else {
@@ -937,7 +940,19 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       {widgets.revenue && !showForm && (
         <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
           <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
-            <h3 className={`font-bold text-sm ${lbl}`}>📈 Выручка</h3>
+            <div>
+              <h3 className={`font-bold text-sm ${lbl}`}>📈 Выручка</h3>
+              {revenueHistory.length > 0 && (() => {
+                const entry = revenueHistory[0];
+                const inputVal = entry.value.toLocaleString('ru-RU');
+                const resultVal = entry.result.toLocaleString('ru-RU');
+                return (
+                  <p className={`text-xs ${sub}`}>
+                    {inputVal} ₽ → {resultVal} ₽ (2.5%)
+                  </p>
+                );
+              })()}
+            </div>
             <div className="flex items-center gap-2">
               {revenueHistory.length > 0 && (
                 <button 
@@ -990,7 +1005,12 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       {widgets.carts && !showForm && (
         <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
           <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
-            <h3 className={`font-bold text-sm ${lbl}`}>🛒 Тележки</h3>
+            <div>
+              <h3 className={`font-bold text-sm ${lbl}`}>🛒 Тележки</h3>
+              {reports.filter(r => r.type === 'carts').length > 0 && (
+                <p className={`text-xs ${sub}`}>{reports.find(r => r.type === 'carts')?.cartsResult?.toLocaleString('ru-RU') ?? 0} ₽</p>
+              )}
+            </div>
             <button
               onClick={() => toggleWidget('carts')}
               className={`text-lg leading-none transition-all active:scale-90 ${sub} hover:text-red-500`}

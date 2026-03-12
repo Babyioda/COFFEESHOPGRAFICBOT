@@ -3,7 +3,7 @@ import {
   ScheduleData, ShiftType, SHIFT_CONFIG,
   DEPARTMENT_CONFIG, getDepartment, Employee,
 } from '../types/schedule';
-import { getEmpShowTg, saveEmpShowTg } from '../utils/adminEdits';
+import { getEmpPrefs } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
 const STORAGE_EMP_NOTES = 'sf_admin_emp_notes';
@@ -60,18 +60,6 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const [noteText, setNoteText] = useState(() => loadEmpNotes()[emp.id] || '');
   const [savedNote, setSavedNote] = useState(() => loadEmpNotes()[emp.id] || '');
 
-  // telegram visibility preference (editable by admin)
-  const [showTgPref, setShowTgPref] = useState(() => getEmpShowTg(emp.id));
-  const toggleShowTgPref = () => {
-    if (!tgUsername) {
-      window.alert('У сотрудника не указан username Telegram');
-      return;
-    }
-    const nv = !showTgPref;
-    setShowTgPref(nv);
-    saveEmpShowTg(emp.id, nv);
-  };
-
   const dept    = emp.department ?? getDepartment(emp.role);
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
 
@@ -99,6 +87,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
 
   const tgUsername = (emp as Employee & { tgUsername?: string }).tgUsername;
+  const showTelegramPref = emp.showTelegram ?? getEmpPrefs(emp.id)?.showTelegram ?? false;
+  const tgError = showTelegramPref && !tgUsername ? 'Telegram username не указан' : '';
 
   const CAL_CELL: Record<ShiftType, string> = isDark ? {
     daily:    'bg-violet-900/40 border-violet-600 text-violet-300',
@@ -232,17 +222,27 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                 <span>{isFriend ? 'В друзьях' : 'Добавить'}</span>
               </button>
 
-              {tgUsername && showTgPref ? (
-                <a
-                  href={`https://t.me/${tgUsername}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl font-semibold text-sm bg-white/20 text-white hover:bg-white/30 transition-all active:scale-95"
-                >
-                  <span>✈️</span>
-                  <span>Написать</span>
-                </a>
+              {showTelegramPref ? (
+                tgUsername ? (
+                  <a
+                    href={`https://t.me/${tgUsername}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl font-semibold text-sm bg-white/20 text-white hover:bg-white/30 transition-all active:scale-95"
+                  >
+                    <span>✈️</span>
+                    <span>Написать</span>
+                  </a>
+                ) : (
+                  <button
+                    disabled
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl font-semibold text-sm bg-white/10 text-white/40 cursor-not-allowed"
+                  >
+                    <span>✈️</span>
+                    <span>TG нет</span>
+                  </button>
+                )
               ) : (
                 <button
                   disabled
@@ -251,6 +251,9 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                   <span>✈️</span>
                   <span>TG нет</span>
                 </button>
+              )}
+              {tgError && (
+                <p className="text-[10px] text-red-500 mt-1">{tgError}</p>
               )}
             </div>
           </div>

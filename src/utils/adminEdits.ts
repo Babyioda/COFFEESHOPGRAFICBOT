@@ -24,7 +24,6 @@ export interface EmpRule {
 const STORAGE_SHIFT_EDITS = 'sf_admin_shift_edits';
 const STORAGE_EMP_NOTES   = 'sf_admin_emp_notes';
 const STORAGE_EMP_RULES   = 'sf_admin_emp_rules';
-const STORAGE_EMP_SHOW_TG  = 'sf_admin_emp_show_tg'; // map empId -> boolean
 const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
 
@@ -35,7 +34,7 @@ export function loadShiftEdits(): ShiftEdit[] {
   catch { return []; }
 }
 
-import { addShiftNote, addEmployeeNote } from './firebase';
+import { addShiftNote, addEmployeeNote, setShiftEdit, setEmpNote, setEmpRule, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
 
 export function saveShiftEdit(edit: ShiftEdit): void {
   const all = loadShiftEdits();
@@ -46,6 +45,16 @@ export function saveShiftEdit(edit: ShiftEdit): void {
   console.log('[AdminEdits] Shift edit saved:', { empId: edit.empId, date: edit.date });
   // Синхронизировать с Apps Script
   syncShiftEditToServer(edit);
+  // Sync to Firebase (best-effort)
+  setShiftEdit({
+    empId: edit.empId,
+    date: edit.date,
+    customStart: edit.customStart,
+    customEnd: edit.customEnd,
+    note: edit.note,
+  }).catch((err) => {
+    console.error('[AdminEdits] Failed to sync shift edit to Firebase:', err);
+  });
   // Also persist note to Firestore (best-effort)
   if (edit.note && edit.note.trim()) {
     addShiftNote(`${edit.empId}-${edit.date}`, edit.note).catch((err) => {
@@ -59,6 +68,16 @@ export function deleteShiftEdit(empId: string, date: string): void {
   localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
   // Синхронизировать удаление
   syncShiftDeleteToServer(empId, date);
+  // Sync deletion to Firebase (best-effort)
+  setShiftEdit({
+    empId,
+    date,
+    customStart: undefined,
+    customEnd: undefined,
+    note: undefined,
+  }).catch((err) => {
+    console.error('[AdminEdits] Failed to sync shift edit removal to Firebase:', err);
+  });
 }
 
 export function getShiftEdit(empId: string, date: string): ShiftEdit | null {
@@ -81,6 +100,10 @@ export function saveEmpNote(empId: string, note: string): void {
     localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(filtered));
     console.log('[AdminEdits] Employee note cleared:', empId);
     syncEmpNoteToServer(empId, '');
+    // Sync to Firebase (best-effort)
+    setEmpNote(empId, '').catch((err) => {
+      console.error('[AdminEdits] Failed to sync employee note to Firebase:', err);
+    });
     return;
   }
   if (idx >= 0) all[idx].note = note;
@@ -89,6 +112,10 @@ export function saveEmpNote(empId: string, note: string): void {
   console.log('[AdminEdits] Employee note saved:', { empId, length: note.length });
   // Синхронизировать с Apps Script
   syncEmpNoteToServer(empId, note);
+  // Sync to Firebase (best-effort)
+  setEmpNote(empId, note).catch((err) => {
+    console.error('[AdminEdits] Failed to sync employee note to Firebase:', err);
+  });
   // Also persist employee note to Firestore (best-effort)
   if (note && note.trim()) {
     addEmployeeNote(empId, note).catch((err) => {
@@ -117,6 +144,10 @@ export function saveEmpRule(empId: string, hours: { start: string; end: string }
     const filtered = all.filter(e => e.empId !== empId);
     localStorage.setItem(STORAGE_EMP_RULES, JSON.stringify(filtered));
     console.log('[AdminEdits] Employee rule cleared:', empId);
+    // Sync to Firebase (best-effort)
+    setEmpRule(empId, hours).catch((err) => {
+      console.error('[AdminEdits] Failed to sync employee rule to Firebase:', err);
+    });
     return;
   }
   
@@ -124,28 +155,79 @@ export function saveEmpRule(empId: string, hours: { start: string; end: string }
   else all.push({ empId, hours });
   localStorage.setItem(STORAGE_EMP_RULES, JSON.stringify(all));
   console.log('[AdminEdits] Employee rule saved:', { empId, start: hours.start, end: hours.end });
+  // Sync to Firebase (best-effort)
+  setEmpRule(empId, hours).catch((err) => {
+    console.error('[AdminEdits] Failed to sync employee rule to Firebase:', err);
+  });
 }
 
 export function getEmpRule(empId: string): { start: string; end: string } | null {
   return loadEmpRules().find(e => e.empId === empId)?.hours ?? null;
 }
 
-// ── Переключатель показа Telegram ───────────────────────────────────
-export function loadEmpShowTgMap(): Record<string, boolean> {
-  try { return JSON.parse(localStorage.getItem(STORAGE_EMP_SHOW_TG) || '{}'); }
-  catch { return {}; }
+// ======== User preferences (Telegram visibility, birthday) ========
+export interface EmpPrefs {
+  empId: string;
+  showTelegram?: boolean;
+  birthday?: string; // MM-DD
 }
 
-export function saveEmpShowTg(empId: string, show: boolean): void {
-  const map = loadEmpShowTgMap();
-  if (show) map[empId] = true;
-  else delete map[empId];
-  localStorage.setItem(STORAGE_EMP_SHOW_TG, JSON.stringify(map));
-  console.log('[AdminEdits] Employee showTelegram saved:', empId, show);
+const STORAGE_EMP_PREFS = 'sf_emp_prefs';
+
+export function loadEmpPrefs(): EmpPrefs[] {
+  try { return JSON.parse(localStorage.getItem(STORAGE_EMP_PREFS) || '[]'); }
+  catch { return []; }
 }
 
-export function getEmpShowTg(empId: string): boolean {
-  return !!loadEmpShowTgMap()[empId];
+export function saveEmpPrefs(pref: EmpPrefs): void {
+  const all = loadEmpPrefs();
+  const idx = all.findIndex(e => e.empId === pref.empId);
+  if (idx >= 0) all[idx] = { ...all[idx], ...pref };
+  else all.push(pref);
+  localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
+  console.log('[AdminEdits] Employee prefs saved:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday });
+  // Sync to Firebase (best-effort)
+  setEmpPrefs({
+    empId: pref.empId,
+    showTelegram: pref.showTelegram,
+    birthday: pref.birthday,
+  }).catch((err) => {
+    console.error('[AdminEdits] Failed to sync employee prefs to Firebase:', err);
+  });
+}
+
+export function getEmpPrefs(empId: string): EmpPrefs | undefined {
+  return loadEmpPrefs().find(e => e.empId === empId);
+}
+
+// ── User-Employee Link (привязка текущего пользователя к сотруднику) ──
+const STORAGE_LINKED_ID = 'sf_linked_emp_id';
+
+export function saveLinkedEmpId(empId: string | null): void {
+  if (!empId) {
+    localStorage.removeItem(STORAGE_LINKED_ID);
+    console.log('[AdminEdits] Linked employee cleared');
+    const uid = getCurrentUid();
+    if (uid) {
+      deleteUserLink(uid).catch((err) => {
+        console.error('[AdminEdits] Failed to clear user link in Firebase:', err);
+      });
+    }
+    return;
+  }
+  localStorage.setItem(STORAGE_LINKED_ID, empId);
+  console.log('[AdminEdits] Linked employee saved:', empId);
+  // Sync to Firebase (best-effort)
+  const uid = getCurrentUid();
+  if (uid) {
+    setUserLink(uid, empId).catch((err) => {
+      console.error('[AdminEdits] Failed to sync user link to Firebase:', err);
+    });
+  }
+}
+
+export function getLinkedEmpId(): string | null {
+  return localStorage.getItem(STORAGE_LINKED_ID) ?? null;
 }
 
 // ── Синхронизация с Apps Script ──────────────────────────────────────

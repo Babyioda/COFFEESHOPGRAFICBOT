@@ -9,12 +9,11 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, getEmpShowTg, saveEmpShowTg } from '../utils/adminEdits';
-import { fetchEmployeeNotes } from '../utils/firebase';
+import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
+import { fetchEmployeeNotes, testConnection } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
-const STORAGE_LINKED_ID   = 'sf_linked_emp_id';
 const STORAGE_TG_NAME     = 'sf_tg_name';
 const STORAGE_FRIENDS_IDS = 'sf_friends_ids';
 
@@ -60,12 +59,16 @@ interface SettingsSectionProps {
   linkedEmp?: Employee | null;
   tgUser?: any;
   tgId?: number | null;
+  onEmployeeUpdate?: (emp: Employee) => void;
 }
 const SettingsSection: React.FC<SettingsSectionProps> = ({
   sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', onSave, lastSync, isLoading, onRefresh, error,
   fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false, linkedEmp, tgUser, tgId,
+  onEmployeeUpdate,
 }) => {
   const { isDark, setTheme } = useTheme();
+  // alias to avoid potential scoping issues inside nested callbacks
+  const updateEmployee = onEmployeeUpdate;
   const [localId, setLocalId]         = useState(sheetId);
   const [localGid, setLocalGid]       = useState(sheetGid);
   const [localApiKey, setLocalApiKey] = useState(sheetsApiKey);
@@ -73,6 +76,24 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
   const [copyingDebug, setCopyingDebug] = useState(false);
+
+  // preferences for linked employee
+  const [showTelegramPref, setShowTelegramPref] = useState(false);
+  const [birthdayInput, setBirthdayInput] = useState(''); // yyyy-mm-dd
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (linkedEmp) {
+      const p = getEmpPrefs(linkedEmp.id) || {} as EmpPrefs;
+      setShowTelegramPref(!!p.showTelegram);
+      if (p.birthday) {
+        setBirthdayInput(`2000-${p.birthday}`);
+      } else {
+        setBirthdayInput('');
+      }
+      setPrefsLoaded(true);
+    }
+  }, [linkedEmp]);
 
   useEffect(() => {
     setFakeDateEnabled(!!fakeDate);
@@ -238,6 +259,66 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       )}
 
+      {/* Личные пользовательские настройки */}
+      {linkedEmp && prefsLoaded && (
+        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>  
+          <h3 className={`font-bold text-sm mb-3 ${lbl}`}>⚙️ Личные настройки</h3>
+          <div className="space-y-3">
+            <div>
+              <label className={`flex items-center gap-2 ${lbl}`}>
+                <input
+                  type="checkbox"
+                  checked={showTelegramPref}
+                  onChange={e => {
+                    const val = e.target.checked;
+                    if (val && linkedEmp && !linkedEmp.tgUsername) {
+                      // don't allow
+                      alert('Невозможно включить: @username не указан в профиле');
+                      return;
+                    }
+                    setShowTelegramPref(val);
+                  }}
+                />
+                Показывать мой Telegram
+              </label>
+              {showTelegramPref && linkedEmp && !linkedEmp.tgUsername && (
+                <p className="text-xs text-red-500 mt-1">Ошибка: @username не установлен</p>
+              )}
+            </div>
+            <div>
+              <label className={`text-xs font-semibold mb-1 block ${sub}`}>День рождения</label>
+              <input
+                type="date"
+                value={birthdayInput}
+                onChange={e => setBirthdayInput(e.target.value)}
+                className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
+              />
+              <p className="text-[10px] text-gray-500">Год игнорируется</p>
+            </div>
+            <button
+              onClick={() => {
+                if (!linkedEmp) return;
+                const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
+                if (showTelegramPref && !linkedEmp.tgUsername) {
+                  alert('Невозможно включить показывать Telegram: username не задан');
+                  return;
+                }
+                saveEmpPrefs({ empId: linkedEmp.id, showTelegram: showTelegramPref, birthday: mmdd });
+                // update object for immediate effect
+                linkedEmp.showTelegram = showTelegramPref;
+                linkedEmp.birthday = mmdd;
+                if (updateEmployee) {
+                  // propagate updated employee back to parent
+                  updateEmployee({...linkedEmp});
+                }
+                alert('Настройки сохранены');
+              }}
+              className="w-full py-2 rounded-xl bg-indigo-500 text-white text-sm"
+            >Сохранить</button>
+          </div>
+        </div>
+      )}
+
       {/* Отправка отладки администраторам — теперь: копирование или открытие чата */}
       {linkedEmp && (
         <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
@@ -296,25 +377,22 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             >
               💬 Отправить
             </button>
+            <button
+              onClick={async () => {
+                try {
+                  await testConnection();
+                  alert('Проверка отправлена в консоль');
+                } catch {}
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
+            >
+              🔌 Тест Firebase
+            </button>
           </div>
           <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
         </div>
       )}
 
-      {/* Настройка отображения Telegram для текущего пользователя */}
-      {linkedEmp && (
-        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}> 
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={showMyTelegram}
-              onChange={handleToggleShowTg}
-              className="w-5 h-5 rounded cursor-pointer"
-            />
-            <span className={`${lbl} text-sm`}>Отображать мой Telegram</span>
-          </label>
-        </div>
-      )}
 
     </div>
   );
@@ -328,8 +406,9 @@ interface AdminPanelProps {
   isLoading?: boolean;
   error?: string | null;
   onRefresh?: () => void;
+  onEmployeeUpdate?: (emp: Employee) => void;
 }
-const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoading, error, onRefresh }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoading, error, onRefresh, onEmployeeUpdate }) => {
   const { isDark } = useTheme();
   const [activeDept, setActiveDept] = useState<Department | 'all'>('all');
 
@@ -339,6 +418,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
   const [editTab, setEditTab] = useState<'notes' | 'rules'>('notes');
   const [ruleStart, setRuleStart] = useState('08:00');
   const [ruleEnd, setRuleEnd] = useState('20:00');
+
+  // admin prefs for employee
+  const [adminShowTelegram, setAdminShowTelegram] = useState(false);
+  const [adminBirthdayInput, setAdminBirthdayInput] = useState('');
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -356,6 +439,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
           setRuleStart('08:00');
           setRuleEnd('20:00');
         }
+        // load prefs
+        const p = getEmpPrefs(emp.id) || {} as any;
+        setAdminShowTelegram(!!p.showTelegram);
+        setAdminBirthdayInput(p.birthday ? `2000-${p.birthday}` : '');
         setEditTab('notes');
       }
     };
@@ -446,6 +533,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
           {onRefresh && !isLoading && (
             <button onClick={onRefresh} className="text-indigo-500 text-xs font-semibold active:scale-95">↻</button>
           )}
+          {/* rules button for admins */}
+          <button
+            onClick={() => window.alert('📄 Правила сотрудников')}
+            title="Правила"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-lg active:scale-95"
+          >📄</button>
         </div>
       </div>
 
@@ -568,6 +661,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                   </div>
                 </>
               )}
+              {/* admin prefs always visible */}
+              {editingEmp && (
+                <div className="mt-4 space-y-3">
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>⚙️ Дополнительно</p>
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={adminShowTelegram}
+                        onChange={e => setAdminShowTelegram(e.target.checked)}
+                      />
+                      Показывать Telegram
+                    </label>
+                  </div>
+                  <div>
+                    <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>День рождения</label>
+                    <input
+                      type="date"
+                      value={adminBirthdayInput}
+                      onChange={e => setAdminBirthdayInput(e.target.value)}
+                      className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
+                    />
+                    <p className="text-[10px] text-gray-500">Год игнорируется</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className={`px-5 pb-6 flex gap-2 border-t ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
               <button
@@ -583,6 +702,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                       saveEmpNote(editingEmp.id, noteText);
                     } else {
                       saveEmpRule(editingEmp.id, { start: ruleStart, end: ruleEnd });
+                    }
+                    // save admin prefs as well
+                    const mmdd = adminBirthdayInput ? adminBirthdayInput.slice(5) : '';
+                    saveEmpPrefs({ empId: editingEmp.id, showTelegram: adminShowTelegram, birthday: mmdd });
+                    editingEmp.showTelegram = adminShowTelegram;
+                    editingEmp.birthday = mmdd;
+                    const upd = onEmployeeUpdate;
+                    if (upd && editingEmp) {
+                      upd({...editingEmp});
                     }
                   }
                   setEditingEmp(null);
@@ -782,24 +910,25 @@ interface ProfileViewProps {
   onFakeDateChange: (d: Date | null) => void;
   onLinkedEmpChange: (id: string | null) => void;
   onMonthChange?: (month: number, year: number) => void;
+  onEmployeeUpdate?: (emp: Employee) => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
   data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '',
   onSave, lastSync, isLoading, onRefresh, error,
   onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
+  onEmployeeUpdate,
 }) => {
   const { isDark } = useTheme();
   const today = fakeDate ?? new Date();
 
   const [activeSection, setActiveSection] = useState<ProfileSection>('staff');
-  const [linkedEmpId, setLinkedEmpId]     = useState<string | null>(() => localStorage.getItem(STORAGE_LINKED_ID));
+  const [linkedEmpId, setLinkedEmpId]     = useState<string | null>(() => getLinkedEmpId());
   const [tgName, setTgName]               = useState<string | null>(() => localStorage.getItem(STORAGE_TG_NAME));
   const [isLinking, setIsLinking]         = useState(false);
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState<Employee[]>([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
-  const [showMyTelegram, setShowMyTelegram] = useState(false);
 
   const tgUser = getTgUser();
   const tgId   = getTgUserId();
@@ -814,7 +943,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       if (empId && data.employees.find(e => e.id === empId)) {
         setLinkedEmpId(empId);
         onLinkedEmpChange(empId);
-        localStorage.setItem(STORAGE_LINKED_ID, empId);
+        saveLinkedEmpId(empId);
       }
     }
   }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
@@ -823,18 +952,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
   const deptCfg   = dept ? DEPARTMENT_CONFIG[dept] : null;
 
-  // load telegram preference when linked employee changes
-  useEffect(() => {
-    if (linkedEmpId) {
-      setShowMyTelegram(getEmpShowTg(linkedEmpId));
-    }
-  }, [linkedEmpId]);
-
   // Привязка — без каких-либо ограничений
   const handleLinkEmployee = (id: string, name: string) => {
     setLinkedEmpId(id);
     onLinkedEmpChange(id);
-    localStorage.setItem(STORAGE_LINKED_ID, id);
+    saveLinkedEmpId(id);
     if (tgId) { saveTgLink(tgId, id); syncTgLink(name, tgId); }
     const displayName = tgUser ? getTgFullName(tgUser) : name;
     setTgName(displayName);
@@ -842,17 +964,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setIsLinking(false);
     setSearchQuery('');
     setSearchResults([]);
-  };
-
-  const handleToggleShowTg = () => {
-    if (!linkedEmpId) return;
-    if (!tgUser?.username) {
-      window.alert('У вас не указан username Telegram, невозможно включить отображение.');
-      return;
-    }
-    const nv = !showMyTelegram;
-    setShowMyTelegram(nv);
-    saveEmpShowTg(linkedEmpId, nv);
   };
 
 
@@ -963,6 +1074,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 linkedEmp={null}
                 tgUser={tgUser}
                 tgId={tgId}
+                onEmployeeUpdate={onEmployeeUpdate}
               />
             </div>
           )}
@@ -1050,6 +1162,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           linkedEmp={linkedEmp}
           tgUser={tgUser}
           tgId={tgId}
+          onEmployeeUpdate={onEmployeeUpdate}
         />
       )}
 
@@ -1061,6 +1174,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           isLoading={isLoading}
           error={error}
           onRefresh={onRefresh}
+          onEmployeeUpdate={onEmployeeUpdate}
         />
       )}
 
