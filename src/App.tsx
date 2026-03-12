@@ -16,7 +16,7 @@ const STORAGE_KEY_ID    = 'ss_sheet_id';
 const STORAGE_KEY_GID   = 'ss_sheet_gid';
 const STORAGE_KEY_API    = 'ss_sheets_api_key';
 const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxy-HcB25G8CHjwaf1k1h45-mBRrSGRB2fGnJa7XgWCqRwzDqP-gBMq1zAR6cpotUXP/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
 const STORAGE_FAKE_DATE  = 'ss_fake_date';
 
 if (!localStorage.getItem(STORAGE_KEY_ID)) {

@@ -116,7 +116,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   const empRates = linkedEmp ? getEmployeeRates(linkedEmp) : [];
 
   const [showForm, setShowForm]         = useState(false);
-  const [reportType, setReportType]     = useState<ReportType>('shifts');
+  const [reportType, setReportType]     = useState<ReportType | null>(null);
   const [shiftFilter, setShiftFilter]   = useState<ShiftFilter>('all');
   const [dateFrom, setDateFrom]         = useState(toDateStr(new Date(now.getFullYear(), now.getMonth(), 1)));
   const [dateTo, setDateTo]             = useState(toDateStr(new Date(now.getFullYear(), now.getMonth()+1, 0)));
@@ -177,6 +177,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   };
 
   const handleGenerate = () => {
+    if (!reportType) return;
     // Отчёты выручки не требуют linkedEmpId
     if (reportType === 'revenue') {
       const val = parseFloat(revenueInput);
@@ -196,7 +197,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       
       setRevenueInput('');
       setShowForm(false);
-      setReportType('shifts');
+      setReportType(null);
       return;
     }
 
@@ -222,7 +223,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       }
       
       setShowForm(false); setSelected(result); setCartsInput('');
-      setReportType('shifts');
+      setReportType(null);
       return;
     }
 
@@ -285,7 +286,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
     localStorage.setItem('sf_reports', JSON.stringify(next));
     setSelected(result);
     setShowForm(false);
-    setReportType('shifts');
+    setReportType(null);
   };
 
   const canGenerate = () => {
@@ -568,13 +569,13 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
         <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
           <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
             <h3 className={`font-bold text-sm ${lbl}`}>📊 Новый отчёт</h3>
-            <button onClick={() => { setShowForm(false); setReportType('shifts'); }} className={`text-xl leading-none ${sub} active:scale-90`}>×</button>
+            <button onClick={() => { setShowForm(false); setReportType(null); }} className={`text-xl leading-none ${sub} active:scale-90`}>×</button>
           </div>
 
           <div className="p-4 space-y-5">
 
             <button
-              onClick={() => setReportType('shifts' as ReportType)}
+              onClick={() => setReportType(null)}
               className={`flex items-center gap-2 text-sm font-semibold active:scale-95 ${sub}`}
             >
               ← Назад к типам
@@ -622,7 +623,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                       
                       setRevenueInput('');
                       setShowForm(false);
-                      setReportType('shifts');
+                      setReportType(null);
                     }
                   }}
                   disabled={!revenueInput || parseFloat(revenueInput) <= 0}
@@ -695,7 +696,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                     
                     setCartsInput('');
                     setShowForm(false);
-                    setReportType('shifts');
+                    setReportType(null);
                   }}
                   disabled={!cartsInput || parseInt(cartsInput) <= 0}
                   className="w-full py-3.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"

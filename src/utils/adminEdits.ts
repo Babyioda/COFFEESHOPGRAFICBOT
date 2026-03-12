@@ -160,26 +160,30 @@ async function syncEmpNoteToServer(empId: string, note: string): Promise<void> {
 /**
  * Отправить информацию об отладке администраторам
  */
-async function syncDebugToServer(empName: string, empDept: string | null, empRoles: string[], tgUsername: string | undefined, tgId: number | null): Promise<void> {
-  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
+async function syncDebugToServer(empName: string, empDept: string | null, empRoles: string[], tgUsername: string | undefined, tgId: number | null, appsScriptUrl?: string): Promise<void> {
+  const scriptUrl = appsScriptUrl || localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
   if (!scriptUrl) return;
   try {
+    const payload = {
+      action: 'senddebug',
+      empName,
+      empDept,
+      empRoles,
+      tgUsername,
+      tgId,
+    };
+    console.log('syncDebugToServer -> POST', scriptUrl, payload);
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'senddebug',
-        empName,
-        empDept,
-        empRoles,
-        tgUsername,
-        tgId,
-      }),
+      body: JSON.stringify(payload),
     });
+    let text = '';
+    try { text = await response.text(); } catch (e) { /* ignore */ }
     if (!response.ok) {
-      console.error(`❌ syncDebug ошибка: ${response.status} ${response.statusText}`);
+      console.error(`❌ syncDebug ошибка: ${response.status} ${response.statusText}`, text);
     } else {
-      console.log(`✅ syncDebug успешно отправлена отладка`);
+      console.log(`✅ syncDebug успешно отправлена отладка`, response.status, text);
     }
   } catch (err) {
     console.error('❌ syncDebug ошибка сети:', err);
@@ -197,5 +201,5 @@ export async function sendDebugToAdmins(params: {
   tgId: number | null;
   appsScriptUrl?: string;
 }): Promise<void> {
-  return syncDebugToServer(params.empName, params.empDept, params.empRoles, params.tgUsername, params.tgId);
+  return syncDebugToServer(params.empName, params.empDept, params.empRoles, params.tgUsername, params.tgId, params.appsScriptUrl);
 }

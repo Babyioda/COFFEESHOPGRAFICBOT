@@ -73,6 +73,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
   const [sendingDebug, setSendingDebug] = useState(false);
+  const [copyingDebug, setCopyingDebug] = useState(false);
 
   useEffect(() => {
     setFakeDateEnabled(!!fakeDate);
@@ -238,42 +239,66 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       )}
 
-      {/* Отправка отладки администраторам — доступна после авторизации */}
+      {/* Отправка отладки администраторам — теперь: копирование или открытие чата */}
       {linkedEmp && (
         <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
-          <h3 className={`font-bold text-sm mb-2 ${lbl}`}>🐛 Отладка</h3>
-          <button
-            onClick={async () => {
-              setSendingDebug(true);
-              try {
-                const allRoles = linkedEmp.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp.role];
-                const dept = linkedEmp.department ?? getDepartment(linkedEmp.role);
-                await sendDebugToAdmins({
-                  empName: linkedEmp.name,
-                  empDept: dept,
-                  empRoles: allRoles,
-                  tgUsername: tgUser?.username,
-                  tgId: tgId,
-                  appsScriptUrl: appsScriptUrlProp || appsScriptUrl,
-                });
-                alert('✅ Отладка отправлена администраторам');
-              } catch (err) {
-                alert('❌ Ошибка отправки отладки');
-                console.error(err);
-              } finally {
-                setSendingDebug(false);
-              }
-            }}
-            disabled={sendingDebug}
-            className={`w-full py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all ${
-              sendingDebug
-                ? 'bg-gray-400 text-white cursor-not-allowed'
-                : 'bg-orange-500 hover:bg-orange-600 text-white'
-            }`}
-          >
-            {sendingDebug ? '⏳ Отправляю...' : '📤 Отправить отладку администраторам'}
-          </button>
-          <p className={`text-xs mt-2 ${sub}`}>Отправит администраторам информацию о вашем аккаунте и должности</p>
+          <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={async () => {
+                setCopyingDebug(true);
+                try {
+                  const allRoles = linkedEmp.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp.role];
+                  const dept = linkedEmp.department ?? getDepartment(linkedEmp.role);
+                  const usernameText = tgUser?.username ? '@' + tgUser.username : 'не указан';
+                  const info = [
+                    '🐛 ОТЛАДКА ОТ ПОЛЬЗОВАТЕЛЯ',
+                    '',
+                    `Сотрудник: ${linkedEmp.name}`,
+                    `Отдел: ${dept}`,
+                    `Должности: ${allRoles.join(', ')}`,
+                    `Username: ${usernameText}`,
+                    `TG ID: ${tgId ?? 'не указан'}`,
+                    '',
+                    `Отправлено: ${new Date().toLocaleString('ru-RU')}`,
+                  ].join('\n');
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(info);
+                  } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = info;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                  }
+                  alert('✅ Информация для отладки скопирована в буфер обмена');
+                } catch (err) {
+                  console.error('Ошибка копирования отладки:', err);
+                  alert('❌ Не удалось скопировать отладку');
+                } finally {
+                  setCopyingDebug(false);
+                }
+              }}
+              disabled={copyingDebug}
+              className={`py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all ${
+                copyingDebug ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-amber-400 hover:bg-amber-500 text-white'
+              }`}
+            >
+              {copyingDebug ? '⏳ Копирую...' : '📋 Копировать отладку'}
+            </button>
+
+            <button
+              onClick={() => {
+                const url = 'https://t.me/milkaaasss';
+                window.open(url, '_blank');
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-sky-500 hover:bg-sky-600 text-white"
+            >
+              💬 Отправить
+            </button>
+          </div>
+          <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
         </div>
       )}
 
