@@ -9,7 +9,7 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote } from '../utils/adminEdits';
+import { saveEmpNote, getEmpNote, sendDebugToAdmins } from '../utils/adminEdits';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
@@ -56,10 +56,14 @@ interface SettingsSectionProps {
   onFakeDateChange: (d: Date | null) => void;
   onOpenAdminPanel?: () => void;
   isAdmin?: boolean;
+  linkedEmp?: Employee | null;
+  tgUser?: any;
+  tgId?: number | null;
+  appsScriptUrlProp?: string;
 }
 const SettingsSection: React.FC<SettingsSectionProps> = ({
   sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', onSave, lastSync, isLoading, onRefresh, error,
-  fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false,
+  fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false, linkedEmp, tgUser, tgId, appsScriptUrlProp,
 }) => {
   const { isDark, setTheme } = useTheme();
   const [localId, setLocalId]         = useState(sheetId);
@@ -68,6 +72,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [localScript, setLocalScript] = useState(appsScriptUrl);
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
+  const [sendingDebug, setSendingDebug] = useState(false);
 
   useEffect(() => {
     setFakeDateEnabled(!!fakeDate);
@@ -230,6 +235,45 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           >
             👥 Панель сотрудников →
           </button>
+        </div>
+      )}
+
+      {/* Отправка отладки администраторам — доступна после авторизации */}
+      {linkedEmp && (
+        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+          <h3 className={`font-bold text-sm mb-2 ${lbl}`}>🐛 Отладка</h3>
+          <button
+            onClick={async () => {
+              setSendingDebug(true);
+              try {
+                const allRoles = linkedEmp.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp.role];
+                const dept = linkedEmp.department ?? getDepartment(linkedEmp.role);
+                await sendDebugToAdmins({
+                  empName: linkedEmp.name,
+                  empDept: dept,
+                  empRoles: allRoles,
+                  tgUsername: tgUser?.username,
+                  tgId: tgId,
+                  appsScriptUrl: appsScriptUrlProp || appsScriptUrl,
+                });
+                alert('✅ Отладка отправлена администраторам');
+              } catch (err) {
+                alert('❌ Ошибка отправки отладки');
+                console.error(err);
+              } finally {
+                setSendingDebug(false);
+              }
+            }}
+            disabled={sendingDebug}
+            className={`w-full py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all ${
+              sendingDebug
+                ? 'bg-gray-400 text-white cursor-not-allowed'
+                : 'bg-orange-500 hover:bg-orange-600 text-white'
+            }`}
+          >
+            {sendingDebug ? '⏳ Отправляю...' : '📤 Отправить отладку администраторам'}
+          </button>
+          <p className={`text-xs mt-2 ${sub}`}>Отправит администраторам информацию о вашем аккаунте и должности</p>
         </div>
       )}
 
@@ -749,6 +793,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 error={error} fakeDate={fakeDate}
                 onFakeDateChange={onFakeDateChange}
                 isAdmin={isAdmin}
+                linkedEmp={null}
+                tgUser={tgUser}
+                tgId={tgId}
+                appsScriptUrlProp={appsScriptUrl}
               />
             </div>
           )}
@@ -788,7 +836,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               </div>
             </div>
-            <button onClick={() => setIsLinking(true)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-sm active:scale-95">✎</button>
+            {isAdmin && <button onClick={() => setIsLinking(true)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-sm active:scale-95">✎</button>}
           </div>
         </div>
       </div>
@@ -833,6 +881,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           onFakeDateChange={onFakeDateChange}
           isAdmin={isAdmin}
           onOpenAdminPanel={() => setShowAdminPanel(true)}
+          linkedEmp={linkedEmp}
+          tgUser={tgUser}
+          tgId={tgId}
+          appsScriptUrlProp={appsScriptUrl}
         />
       )}
 

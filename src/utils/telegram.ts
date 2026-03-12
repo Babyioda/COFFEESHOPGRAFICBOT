@@ -117,13 +117,18 @@ export async function syncTgLink(empName: string, tgId: number): Promise<void> {
   const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
   if (!scriptUrl) return;
   try {
-    await fetch(scriptUrl, {
+    const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'link', empName, tgId: String(tgId) }),
     });
-  } catch {
-    // Не блокируем UI если синхронизация не удалась
+    if (!response.ok) {
+      console.error(`❌ syncTgLink ошибка: ${response.status} ${response.statusText}`);
+    } else {
+      console.log(`✅ syncTgLink успешно: ${empName} (${tgId})`);
+    }
+  } catch (err) {
+    console.error('❌ syncTgLink ошибка сети:', err);
   }
 }
 

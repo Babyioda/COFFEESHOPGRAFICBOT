@@ -15,6 +15,8 @@ export interface EmpNote {
 
 const STORAGE_SHIFT_EDITS = 'sf_admin_shift_edits';
 const STORAGE_EMP_NOTES   = 'sf_admin_emp_notes';
+const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytWQyI60qdibQQCCMklCGS6IzniSYTZuNOkqCpzYP8P9fxlXchVuX2679MMwAQqJdI/exec';
 
 // ── Правки смен ─────────────────────────────────────────────────────
 
@@ -29,11 +31,15 @@ export function saveShiftEdit(edit: ShiftEdit): void {
   if (idx >= 0) all[idx] = edit;
   else all.push(edit);
   localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
+  // Синхронизировать с Apps Script
+  syncShiftEditToServer(edit);
 }
 
 export function deleteShiftEdit(empId: string, date: string): void {
   const all = loadShiftEdits().filter(e => !(e.empId === empId && e.date === date));
   localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
+  // Синхронизировать удаление
+  syncShiftDeleteToServer(empId, date);
 }
 
 export function getShiftEdit(empId: string, date: string): ShiftEdit | null {
@@ -54,13 +60,142 @@ export function saveEmpNote(empId: string, note: string): void {
     // Удаляем если пустое
     const filtered = all.filter(e => e.empId !== empId);
     localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(filtered));
+    syncEmpNoteToServer(empId, '');
     return;
   }
   if (idx >= 0) all[idx].note = note;
   else all.push({ empId, note });
   localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(all));
+  // Синхронизировать с Apps Script
+  syncEmpNoteToServer(empId, note);
 }
 
 export function getEmpNote(empId: string): string {
   return loadEmpNotes().find(e => e.empId === empId)?.note ?? '';
+}
+
+// ── Синхронизация с Apps Script ──────────────────────────────────────
+
+/**
+ * Синхронизировать правку смены на сервер
+ */
+async function syncShiftEditToServer(edit: ShiftEdit): Promise<void> {
+  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
+  if (!scriptUrl) return;
+  try {
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'editshift',
+        empId: edit.empId,
+        date: edit.date,
+        customStart: edit.customStart,
+        customEnd: edit.customEnd,
+        note: edit.note,
+      }),
+    });
+    if (!response.ok) {
+      console.error(`❌ syncShiftEdit ошибка: ${response.status} ${response.statusText}`);
+    } else {
+      console.log(`✅ syncShiftEdit успешно: ${edit.empId} ${edit.date}`);
+    }
+  } catch (err) {
+    console.error('❌ syncShiftEdit ошибка сети:', err);
+  }
+}
+
+/**
+ * Синхронизировать удаление правки смены на сервер
+ */
+async function syncShiftDeleteToServer(empId: string, date: string): Promise<void> {
+  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
+  if (!scriptUrl) return;
+  try {
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deleteshift',
+        empId,
+        date,
+      }),
+    });
+    if (!response.ok) {
+      console.error(`❌ syncShiftDelete ошибка: ${response.status} ${response.statusText}`);
+    } else {
+      console.log(`✅ syncShiftDelete успешно: ${empId} ${date}`);
+    }
+  } catch (err) {
+    console.error('❌ syncShiftDelete ошибка сети:', err);
+  }
+}
+
+/**
+ * Синхронизировать примечание к сотруднику на сервер
+ */
+async function syncEmpNoteToServer(empId: string, note: string): Promise<void> {
+  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
+  if (!scriptUrl) return;
+  try {
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'empnote',
+        empId,
+        note,
+      }),
+    });
+    if (!response.ok) {
+      console.error(`❌ syncEmpNote ошибка: ${response.status} ${response.statusText}`);
+    } else {
+      console.log(`✅ syncEmpNote успешно: ${empId}`);
+    }
+  } catch (err) {
+    console.error('❌ syncEmpNote ошибка сети:', err);
+  }
+}
+
+/**
+ * Отправить информацию об отладке администраторам
+ */
+async function syncDebugToServer(empName: string, empDept: string | null, empRoles: string[], tgUsername: string | undefined, tgId: number | null): Promise<void> {
+  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
+  if (!scriptUrl) return;
+  try {
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'senddebug',
+        empName,
+        empDept,
+        empRoles,
+        tgUsername,
+        tgId,
+      }),
+    });
+    if (!response.ok) {
+      console.error(`❌ syncDebug ошибка: ${response.status} ${response.statusText}`);
+    } else {
+      console.log(`✅ syncDebug успешно отправлена отладка`);
+    }
+  } catch (err) {
+    console.error('❌ syncDebug ошибка сети:', err);
+  }
+}
+
+/**
+ * Экспортируемая функция для отправки отладки
+ */
+export async function sendDebugToAdmins(params: {
+  empName: string;
+  empDept: string | null;
+  empRoles: string[];
+  tgUsername?: string;
+  tgId: number | null;
+  appsScriptUrl?: string;
+}): Promise<void> {
+  return syncDebugToServer(params.empName, params.empDept, params.empRoles, params.tgUsername, params.tgId);
 }
