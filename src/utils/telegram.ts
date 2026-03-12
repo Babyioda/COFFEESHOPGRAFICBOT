@@ -226,17 +226,33 @@ export function getEmpIdByCode(code: string): string | null {
  * Удалить все привязки Telegram ID для заданного сотрудника.
  * Используется для "выхода" сотрудника из всех сессий.
  */
-export function clearTgLinksForEmp(empId: string) {
+export async function clearTgLinksForEmp(empId: string) {
   const links = loadTgLinks();
-  let changed = false;
+  const tgIdsToDelete: string[] = [];
+  
+  // Найти все tgId привязанные к этому empId
   for (const tg in links) {
     if (links[tg] === empId) {
       delete links[tg];
-      changed = true;
+      tgIdsToDelete.push(tg);
     }
   }
-  if (changed) {
+  
+  if (tgIdsToDelete.length > 0) {
     localStorage.setItem(STORAGE_TG_LINKS, JSON.stringify(links));
+    console.log(`[Telegram] Cleared ${tgIdsToDelete.length} link(s) for employee ${empId}`);
+    
+    // Попытка синхронизировать с Firebase (если доступно)
+    try {
+      const { deleteUserLink, getCurrentUid } = await import('./firebase');
+      const uid = getCurrentUid();
+      if (uid) {
+        await deleteUserLink(uid);
+        console.log(`[Telegram] Synced user link deletion to Firebase for ${uid}`);
+      }
+    } catch (err) {
+      console.warn('[Telegram] Firebase sync not available or failed:', err);
+    }
   }
 }
 
