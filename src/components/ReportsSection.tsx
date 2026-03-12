@@ -258,8 +258,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       ? myShifts
       : myShifts.filter(s => s.shift === activeFilter);
 
-    const filteredHours = filtered.reduce((sum, s) => sum + (SHIFT_HOURS[s.shift] ?? 0), 0);
-    const totalHours    = myShifts.reduce((sum, s) => sum + (SHIFT_HOURS[s.shift] ?? 0), 0);
+    const totalHours = myShifts.reduce((sum, s) => sum + (SHIFT_HOURS[s.shift] ?? 0), 0);
 
     const countByType: Record<ShiftFilter, number> = {
       all:   myShifts.length,
