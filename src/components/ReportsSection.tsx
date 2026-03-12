@@ -481,10 +481,6 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   return (
     <div className="space-y-4 pb-6">
 
-  // ── Список отчётов + форма ───────────────────────────────────────
-  return (
-    <div className="space-y-4 pb-6">
-
       {/* Кнопка «+» для добавления */}
       {!showForm && (
         <button
