@@ -3,6 +3,7 @@ import {
   ScheduleData, ShiftType, SHIFT_CONFIG,
   DEPARTMENT_CONFIG, getDepartment, Employee,
 } from '../types/schedule';
+import { getEmpShowTg, saveEmpShowTg } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
 const STORAGE_EMP_NOTES = 'sf_admin_emp_notes';
@@ -58,6 +59,18 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState(() => loadEmpNotes()[emp.id] || '');
   const [savedNote, setSavedNote] = useState(() => loadEmpNotes()[emp.id] || '');
+
+  // telegram visibility preference (editable by admin)
+  const [showTgPref, setShowTgPref] = useState(() => getEmpShowTg(emp.id));
+  const toggleShowTgPref = () => {
+    if (!tgUsername) {
+      window.alert('У сотрудника не указан username Telegram');
+      return;
+    }
+    const nv = !showTgPref;
+    setShowTgPref(nv);
+    saveEmpShowTg(emp.id, nv);
+  };
 
   const dept    = emp.department ?? getDepartment(emp.role);
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
@@ -219,7 +232,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                 <span>{isFriend ? 'В друзьях' : 'Добавить'}</span>
               </button>
 
-              {tgUsername ? (
+              {tgUsername && showTgPref ? (
                 <a
                   href={`https://t.me/${tgUsername}`}
                   target="_blank"

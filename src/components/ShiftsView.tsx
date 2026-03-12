@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import {
   getShiftEdit, saveShiftEdit, deleteShiftEdit,
   getEmpNote, loadShiftEdits, loadEmpNotes,
+  getEmpRule,
 } from '../utils/adminEdits';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -45,6 +46,18 @@ const STORAGE_FRIENDS_IDS   = 'sf_friends_ids';
 function getDeptColorByRole(role: string, fallback = '#6366f1'): string {
   const dept = getDepartment(role);
   return dept ? DEPARTMENT_CONFIG[dept].color : fallback;
+}
+
+// format hours into compact "00-00" label; input like "08:00" -> "08" etc
+function formatHourLabel(start?: string, end?: string): string | undefined {
+  if (!start || !end) return undefined;
+  const s = start.slice(0,5).replace(':', '');
+  const e = end.slice(0,5).replace(':', '');
+  let lbl = `${s}-${e}`;
+  return lbl
+    .replace('0800-0800', '08-08')
+    .replace('0800-2000', '08-20')
+    .replace('2000-0800', '20-08');
 }
 
 function getColleagueColorForDay(emp: Employee, data: ScheduleData, dateStr: string): string {
@@ -241,14 +254,44 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
   const shiftEdits = loadShiftEdits();
   const empNotes   = loadEmpNotes();
 
+  const [fsEmpNotes, setFsEmpNotes] = useState<Record<string,string>>({});
+  const [fsShiftNotes, setFsShiftNotes] = useState<Record<string,string>>({});
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const empMap: Record<string,string> = {};
+        const shiftMap: Record<string,string> = {};
+        await Promise.all(data.employees.map(async (emp) => {
+          try {
+            const ens = await fetchEmployeeNotes(emp.id);
+            if (ens && ens.length) empMap[emp.id] = ens[0].text;
+          } catch (e) {}
+          try {
+            const shiftId = `${emp.id}-${dateStr}`;
+            const sns = await fetchShiftNotes(shiftId);
+            if (sns && sns.length) shiftMap[emp.id] = sns[0].text;
+          } catch (e) {}
+        }));
+        if (!mounted) return;
+        setFsEmpNotes(empMap);
+        setFsShiftNotes(shiftMap);
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, [data.employees, dateStr]);
+
   const getCustomTimes = (empId: string) => {
     return shiftEdits.find(e => e.empId === empId && e.date === dateStr);
   };
   const getNote = (empId: string) => {
-    return empNotes.find(e => e.empId === empId)?.note ?? '';
+    return fsEmpNotes[empId] ?? empNotes.find(e => e.empId === empId)?.note ?? '';
   };
   const getShiftNote = (empId: string) => {
-    return shiftEdits.find(e => e.empId === empId && e.date === dateStr)?.note ?? '';
+    return fsShiftNotes[empId] ?? shiftEdits.find(e => e.empId === empId && e.date === dateStr)?.note ?? '';
   };
 
   const working: {
@@ -824,24 +867,18 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
             // Кастомное время для моей смены
             const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
-            let myTimeStart = myCustom?.customStart ?? myTimes?.start;
-            let myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
-            const isCustomTime = !!myCustom;
+            const myRule      = linkedEmp ? getEmpRule(linkedEmp.id) : null;
+            
+            let myTimeStart = myCustom?.customStart ?? myRule?.hours.start ?? myTimes?.start;
+            let myTimeEnd   = myCustom?.customEnd   ?? myRule?.hours.end   ?? myTimes?.end;
+            const isCustomTime = !!myCustom || !!myRule;
             let myShortTime: string | undefined = undefined;
             if (myHours) {
               myShortTime = `${myHours}ч`;
               myTimeStart = `${myHours} ч`;
               myTimeEnd = undefined;
             } else if (myTimeStart && myTimeEnd) {
-              // show compact label; when a custom time is set, keep the colon for clarity
-              if (isCustomTime) {
-                myShortTime = `${myTimeStart.slice(0,5)}-${myTimeEnd.slice(0,5)}`;
-              } else {
-                myShortTime = `${myTimeStart.slice(0,5).replace(':','')}-${myTimeEnd.slice(0,5).replace(':','')}`
-                  .replace('0800-0800','08-08')
-                  .replace('0800-2000','08-20')
-                  .replace('2000-0800','20-08');
-              }
+              myShortTime = formatHourLabel(myTimeStart, myTimeEnd) || myTimes?.short;
             } else {
               myShortTime = myTimes?.short;
             }
@@ -852,8 +889,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               const cEntry = data.shifts.find(s => s.employeeId === cId && s.date === dateStr);
               const cShift = cEntry?.shift ?? 'off';
               const cHours = cEntry?.hours;
+              const cRule  = getEmpRule(cId);
               const color  = getColleagueColorForDay(cEmp, data, dateStr);
-              return { shift: cShift, emp: cEmp, color, hours: cHours };
+              return { shift: cShift, emp: cEmp, color, hours: cHours, rule: cRule };
             }).filter((c): c is NonNullable<typeof c> => c !== null && (c.shift !== 'off' || !!c.hours));
 
             const hasColleague = colleagueShifts.length > 0;
@@ -924,7 +962,14 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                       <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                         {colleagueShifts.map((c, i) => {
                           const cTimes = SHIFT_TIMES[c.shift];
-                          const text = c.hours ? `${c.hours}ч` : cTimes?.short;
+                          let text: string | undefined;
+                          if (c.hours) {
+                            text = `${c.hours}ч`;
+                          } else if (c.rule) {
+                            text = formatHourLabel(c.rule.hours.start, c.rule.hours.end) || cTimes?.short;
+                          } else {
+                            text = cTimes?.short;
+                          }
                           if (!text) return null;
                           return (
                             <div
@@ -947,7 +992,14 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                   <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                     {colleagueShifts.map((c, i) => {
                       const cTimes = SHIFT_TIMES[c.shift];
-                      const text = c.hours ? `${c.hours}ч` : cTimes?.short;
+                      let text: string | undefined;
+                      if (c.hours) {
+                        text = `${c.hours}ч`;
+                      } else if (c.rule) {
+                        text = formatHourLabel(c.rule.hours.start, c.rule.hours.end) || cTimes?.short;
+                      } else {
+                        text = cTimes?.short;
+                      }
                       if (!text) return null;
                       return (
                         <div

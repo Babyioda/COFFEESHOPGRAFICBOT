@@ -238,6 +238,14 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       return d >= from && d <= to && ['daily','day','night'].includes(s.shift);
     });
 
+    // если выбранная должность — отфильтровать по ней
+    if ((reportType === 'hours' || reportType === 'income') && selectedRole) {
+      myShifts = myShifts.filter(s => {
+        const role = s.role || linkedEmp?.role || '';
+        return role === selectedRole;
+      });
+    }
+
     // Если не учитывать будущие смены - отфильтровать по сегодняшней дате
     if (!includeFuture) {
       myShifts = myShifts.filter(s => {
@@ -291,7 +299,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
 
   const canGenerate = () => {
     if (!linkedEmpId) return false;
-    if (reportType === 'income' && empRates.length === 0) return false;
+    if ((reportType === 'income' || reportType === 'hours') && empRates.length === 0) return false;
     return true;
   };
 
@@ -354,12 +362,12 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
               <div className="text-white/70 text-sm mt-1">
                 {r.hourlyRate} ₽/ч × {r.totalHours} ч
               </div>
-              {r.selectedRole && (
-                <div className="text-white/60 text-xs mt-0.5">
-                  Должность: {r.selectedRole}
-                </div>
-              )}
             </>
+          )}
+          {(r.type === 'income' || r.type === 'hours') && r.selectedRole && (
+            <div className="text-white/60 text-xs mt-0.5">
+              Должность: {r.selectedRole}
+            </div>
           )}
           {(r.type === 'shifts' || r.type === 'hours' || r.type === 'income') && (
             <div className="text-white/70 text-sm mt-1">
@@ -368,14 +376,17 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
           )}
         </div>
 
-        {/* Пометка для дохода */}
-        {r.type === 'income' && (
+        {/* Пометка для дохода/часов */}
+        {(r.type === 'income' || r.type === 'hours') && (
           <div className={`rounded-2xl p-4 border flex items-start gap-3 ${
             isDark ? 'bg-amber-900/20 border-amber-700/40' : 'bg-amber-50 border-amber-200'
           }`}>
             <span className="text-lg flex-shrink-0">⚠️</span>
             <p className={`text-xs leading-relaxed ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>
-              Данная сумма является <strong>почасовым расчётом</strong> и не включает в себя никакие удержания, премии, штрафы и прочие начисления.
+              {r.type === 'income'
+                ? <>Данная сумма является <strong>почасовым расчётом</strong> и не включает в себя никакие удержания, премии, штрафы и прочие начисления.</>
+                : <>В отчёт попадают только часы, которые уже проставлены в графике.</>
+              }
               {r.includeFuture && (
                 <><br /><br /><strong>Отчет включает будущие смены.</strong> Данные корректны только если график проставлен до конца месяца.</>
               )}
@@ -538,7 +549,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
             <div className={`my-3 h-px ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
 
             {/* Остальные отчеты */}
-            {REPORT_TYPES.filter(rt => rt.id !== 'revenue' && rt.id !== 'carts').map(rt => (
+            {REPORT_TYPES.filter(rt => rt.id !== 'revenue' && rt.id !== 'carts' && rt.id !== 'shifts').map(rt => (
               <button
                 key={rt.id}
                 onClick={() => { setReportType(rt.id); setShiftFilter('all'); setSelectedRole(''); setIncludeFuture(false); }}
@@ -790,10 +801,10 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                   </div>
                 )}
 
-                {/* Выбор должности — только для «Доход» */}
-                {reportType === 'income' && (
+                {/* Выбор должности — для «Доход» и «Часы» */}
+                {(reportType === 'income' || reportType === 'hours') && (
                   <div>
-                    <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Должность и ставка</p>
+                    <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Должность</p>
                     {empRates.length === 0 ? (
                       <div className={`rounded-xl p-3 border text-center ${isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'}`}>
                         <p className={`text-xs ${sub}`}>⚠️ Ставка для вашей должности не найдена</p>
@@ -804,7 +815,9 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                       }`}>
                         <div>
                           <p className={`text-sm font-semibold ${lbl}`}>{empRates[0].role}</p>
-                          <p className={`text-xs ${sub}`}>{empRates[0].rate} ₽/ч</p>
+                          {reportType === 'income' && (
+                            <p className={`text-xs ${sub}`}>{empRates[0].rate} ₽/ч</p>
+                          )}
                         </div>
                         <span className="text-indigo-500 font-bold text-lg">✓</span>
                       </div>
@@ -822,7 +835,9 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                           >
                             <div className="text-left">
                               <p className={`text-sm font-semibold ${lbl}`}>{role}</p>
-                              <p className={`text-xs ${sub}`}>{rate} ₽/ч</p>
+                              {reportType === 'income' && (
+                                <p className={`text-xs ${sub}`}>{rate} ₽/ч</p>
+                              )}
                             </div>
                             <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                               selectedRole === role || (selectedRole === '' && empRates[0].role === role)
@@ -843,7 +858,9 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                     }`}>
                       <span className="text-sm">⚠️</span>
                       <p className={`text-[11px] leading-relaxed ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
-                        Сумма является только почасовым расчётом и не включает удержания и прочие начисления.
+                        {reportType === 'income'
+                          ? 'Сумма является только почасовым расчётом и не включает удержания и прочие начисления.'
+                          : 'В отчёт попадают только часы, которые уже проставлены в графике.'}
                       </p>
                     </div>
                   </div>
@@ -872,7 +889,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       {reports.length > 0 && !showForm && (
         <div className="space-y-2">
           <p className={`text-xs font-bold uppercase tracking-wide px-1 ${sub}`}>Сохранённые отчёты</p>
-          {reports.map(r => {
+          {reports.filter(r => r.type !== 'shifts').map(r => {
             const icons: Record<ReportType, string>  = { income: '💰', hours: '⏱️', shifts: '📅', revenue: '📈', carts: '🛒' };
             const colors: Record<ReportType, string> = { income: '#059669', hours: '#2563eb', shifts: '#7c3aed', revenue: '#d97706', carts: '#0369a1' };
             const mainValue = r.type === 'income'
@@ -884,11 +901,15 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
               : r.type === 'carts'
               ? `${(r.cartsResult ?? 0).toLocaleString('ru-RU')} ₽`
               : `${r.totalShifts} смен`;
-            const subText = r.type === 'revenue'
-              ? `Выручка: ${(r.revenueInput ?? 0).toLocaleString('ru-RU')} ₽`
-              : r.type === 'carts'
-              ? `${r.cartsInput} тележек`
-              : `${formatDate(r.dateFrom)} — ${formatDate(r.dateTo)}`;
+            let subText: string;
+            if (r.type === 'revenue') {
+              subText = `Выручка: ${(r.revenueInput ?? 0).toLocaleString('ru-RU')} ₽`;
+            } else if (r.type === 'carts') {
+              subText = `${r.cartsInput} тележек`;
+            } else {
+              const range = `${formatDate(r.dateFrom)} — ${formatDate(r.dateTo)}`;
+              subText = r.selectedRole ? `${r.selectedRole} · ${range}` : range;
+            }
             return (
               <button
                 key={r.id}

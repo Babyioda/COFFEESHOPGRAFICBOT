@@ -9,7 +9,8 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote, sendDebugToAdmins } from '../utils/adminEdits';
+import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, getEmpShowTg, saveEmpShowTg } from '../utils/adminEdits';
+import { fetchEmployeeNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
@@ -59,11 +60,10 @@ interface SettingsSectionProps {
   linkedEmp?: Employee | null;
   tgUser?: any;
   tgId?: number | null;
-  appsScriptUrlProp?: string;
 }
 const SettingsSection: React.FC<SettingsSectionProps> = ({
   sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', onSave, lastSync, isLoading, onRefresh, error,
-  fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false, linkedEmp, tgUser, tgId, appsScriptUrlProp,
+  fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false, linkedEmp, tgUser, tgId,
 }) => {
   const { isDark, setTheme } = useTheme();
   const [localId, setLocalId]         = useState(sheetId);
@@ -72,7 +72,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [localScript, setLocalScript] = useState(appsScriptUrl);
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
-  const [sendingDebug, setSendingDebug] = useState(false);
   const [copyingDebug, setCopyingDebug] = useState(false);
 
   useEffect(() => {
@@ -302,6 +301,20 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       )}
 
+      {/* Настройка отображения Telegram для текущего пользователя */}
+      {linkedEmp && (
+        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}> 
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={showMyTelegram}
+              onChange={handleToggleShowTg}
+              className="w-5 h-5 rounded cursor-pointer"
+            />
+            <span className={`${lbl} text-sm`}>Отображать мой Telegram</span>
+          </label>
+        </div>
+      )}
 
     </div>
   );
@@ -323,8 +336,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
   // state for editing notes via admin panel
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
   const [noteText, setNoteText] = useState('');
+  const [editTab, setEditTab] = useState<'notes' | 'rules'>('notes');
+  const [ruleStart, setRuleStart] = useState('08:00');
+  const [ruleEnd, setRuleEnd] = useState('20:00');
 
-  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+  useEffect(() => {
+    const handler = (e: any) => {
+      const empId = e?.detail?.empId;
+      if (!empId) return;
+      const emp = data.employees.find(x => x.id === empId) || null;
+      if (emp) {
+        setEditingEmp(emp);
+        setNoteText(getEmpNote(emp.id));
+        const rule = getEmpRule(emp.id);
+        if (rule) {
+          setRuleStart(rule.start);
+          setRuleEnd(rule.end);
+        } else {
+          setRuleStart('08:00');
+          setRuleEnd('20:00');
+        }
+        setEditTab('notes');
+      }
+    };
+    window.addEventListener('open-emp-editor', handler as EventListener);
+    return () => window.removeEventListener('open-emp-editor', handler as EventListener);
+  }, [data.employees]);
+
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
 
@@ -334,6 +372,64 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
         const allRoles = e.roles && e.roles.length > 0 ? e.roles : [e.role];
         return allRoles.some(r => getDepartment(r) === activeDept);
       });
+
+  // Employee list item component (fetches latest employee note from Firestore)
+  const EmployeeListItem: React.FC<{ emp: Employee }> = ({ emp }) => {
+    const { isDark } = useTheme();
+    const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+    const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
+    const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
+    const dept = emp.department ?? getDepartment(emp.role);
+    const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
+    
+    useEffect(() => {
+      let mounted = true;
+      (async () => {
+        try {
+          await fetchEmployeeNotes(emp.id);
+          if (!mounted) return;
+          // Fetch triggers Firebase logging without storing in local state
+        } catch (e) {
+          // ignore
+        }
+      })();
+      return () => { mounted = false; };
+    }, [emp.id]);
+
+    return (
+      <div className={`rounded-2xl border p-3 flex items-center gap-3 ${card}`}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: emp.color }}>
+          {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold truncate ${lbl}`}>{emp.name}</p>
+          <p className={`text-xs truncate ${sub}`}>{emp.roles && emp.roles.length > 1 ? emp.roles.join(' / ') : emp.role}</p>
+          {deptCfg && <span className="text-[10px] font-semibold" style={{ color: deptCfg.color }}>{deptCfg.icon} {deptCfg.label}</span>}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              // open editor via DOM event: set editingEmp in parent by dispatching custom event
+              const ev = new CustomEvent('open-emp-editor', { detail: { empId: emp.id } });
+              window.dispatchEvent(ev as any);
+            }}
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all active:scale-95 ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+            title="Редактировать примечание"
+          >✏️</button>
+          <button
+            onClick={() => {
+              if (window.confirm('Разорвать все сессии Telegram для этого сотрудника?')) {
+                clearTgLinksForEmp(emp.id);
+                window.alert('Готово. Сотрудник будет выведен со всех аккаунтов.');
+              }
+            }}
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all active:scale-95 ${isDark ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
+            title="Выйти из всех сессий"
+          >🚪</button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: isDark ? '#0f172a' : '#f1f5f9' }}>
@@ -379,43 +475,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-        {filteredEmps.map(emp => {
-          const dept = emp.department ?? getDepartment(emp.role);
-          const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
-          const empNote = getEmpNote(emp.id);
-          return (
-            <div key={emp.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${card}`}>
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: emp.color }}>
-                {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold truncate ${lbl}`}>{emp.name}</p>
-                <p className={`text-xs truncate ${sub}`}>{emp.roles && emp.roles.length > 1 ? emp.roles.join(' / ') : emp.role}</p>
-                {deptCfg && <span className="text-[10px] font-semibold" style={{ color: deptCfg.color }}>{deptCfg.icon} {deptCfg.label}</span>}
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setEditingEmp(emp);
-                    setNoteText(getEmpNote(emp.id));
-                  }}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all active:scale-95 ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                  title="Редактировать примечание"
-                >✏️</button>
-                <button
-                  onClick={() => {
-                    if (window.confirm('Разорвать все сессии Telegram для этого сотрудника?')) {
-                      clearTgLinksForEmp(emp.id);
-                      window.alert('Готово. Сотрудник будет выведен со всех аккаунтов.');
-                    }
-                  }}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all active:scale-95 ${isDark ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
-                  title="Выйти из всех сессий"
-                >🚪</button>
-              </div>
-            </div>
-          );
-        })}
+        {filteredEmps.map(emp => (
+          <EmployeeListItem key={emp.id} emp={emp} />
+        ))}
       </div>
 
       {/* модалка редактирования примечания */}
@@ -430,27 +492,82 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
               <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
             </div>
             <div className={`px-5 pb-4 border-b ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-                    ✏️ Редактировать примечание
+                    ⚙️ Настройки сотрудника
                   </p>
                   <h2 className={`text-lg font-extrabold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{editingEmp.name}</h2>
                 </div>
                 <button onClick={() => setEditingEmp(null)} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>×</button>
               </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditTab('notes')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    editTab === 'notes'
+                      ? 'bg-indigo-500 text-white'
+                      : isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  💬 Примечание
+                </button>
+                <button
+                  onClick={() => setEditTab('rules')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    editTab === 'rules'
+                      ? 'bg-indigo-500 text-white'
+                      : isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  ⏰ Правило (часы)
+                </button>
+              </div>
             </div>
             <div className="px-5 py-4">
-              <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                💬 Примечание к сотруднику
-              </p>
-              <textarea
-                value={noteText}
-                onChange={e => setNoteText(e.target.value)}
-                placeholder="Например: работает 0.5 ставки, особые условия..."
-                rows={4}
-                className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
-              />
+              {editTab === 'notes' ? (
+                <>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    💬 Примечание к сотруднику
+                  </p>
+                  <textarea
+                    value={noteText}
+                    onChange={e => setNoteText(e.target.value)}
+                    placeholder="Например: работает 0.5 ставки, особые условия..."
+                    rows={4}
+                    className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
+                  />
+                </>
+              ) : (
+                <>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                    ⏰ Часы работы
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>От (начало)</label>
+                      <input
+                        type="time"
+                        value={ruleStart}
+                        onChange={e => setRuleStart(e.target.value)}
+                        className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>До (конец)</label>
+                      <input
+                        type="time"
+                        value={ruleEnd}
+                        onChange={e => setRuleEnd(e.target.value)}
+                        className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
+                      />
+                    </div>
+                    <div className={`p-3 rounded-xl text-xs ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-blue-50 text-blue-700'}`}>
+                      ℹ️ Эти часы будут автоматически применяться ко всем сменам этого сотрудника
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <div className={`px-5 pb-6 flex gap-2 border-t ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
               <button
@@ -461,7 +578,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
               </button>
               <button
                 onClick={() => {
-                  if (editingEmp) saveEmpNote(editingEmp.id, noteText);
+                  if (editingEmp) {
+                    if (editTab === 'notes') {
+                      saveEmpNote(editingEmp.id, noteText);
+                    } else {
+                      saveEmpRule(editingEmp.id, { start: ruleStart, end: ruleEnd });
+                    }
+                  }
                   setEditingEmp(null);
                 }}
                 className="flex-grow flex-2 py-3 rounded-2xl text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition-all active:scale-95"
@@ -676,6 +799,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [searchQuery, setSearchQuery]     = useState('');
   const [searchResults, setSearchResults] = useState<Employee[]>([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showMyTelegram, setShowMyTelegram] = useState(false);
 
   const tgUser = getTgUser();
   const tgId   = getTgUserId();
@@ -699,6 +823,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
   const deptCfg   = dept ? DEPARTMENT_CONFIG[dept] : null;
 
+  // load telegram preference when linked employee changes
+  useEffect(() => {
+    if (linkedEmpId) {
+      setShowMyTelegram(getEmpShowTg(linkedEmpId));
+    }
+  }, [linkedEmpId]);
+
   // Привязка — без каких-либо ограничений
   const handleLinkEmployee = (id: string, name: string) => {
     setLinkedEmpId(id);
@@ -711,6 +842,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     setIsLinking(false);
     setSearchQuery('');
     setSearchResults([]);
+  };
+
+  const handleToggleShowTg = () => {
+    if (!linkedEmpId) return;
+    if (!tgUser?.username) {
+      window.alert('У вас не указан username Telegram, невозможно включить отображение.');
+      return;
+    }
+    const nv = !showMyTelegram;
+    setShowMyTelegram(nv);
+    saveEmpShowTg(linkedEmpId, nv);
   };
 
 
@@ -821,7 +963,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 linkedEmp={null}
                 tgUser={tgUser}
                 tgId={tgId}
-                appsScriptUrlProp={appsScriptUrl}
               />
             </div>
           )}
@@ -909,7 +1050,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           linkedEmp={linkedEmp}
           tgUser={tgUser}
           tgId={tgId}
-          appsScriptUrlProp={appsScriptUrl}
         />
       )}
 
