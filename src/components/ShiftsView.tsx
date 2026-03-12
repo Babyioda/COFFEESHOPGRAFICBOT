@@ -682,47 +682,32 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
 
   const EmpBtn = ({ emp }: { emp: Employee }) => {
     const isSelected = selectedIds.includes(emp.id);
-    const isDisabled = !isSelected && selectedIds.length >= 3;
-    const empColor   = getDeptColorByRole(emp.role, emp.color);
-    const empNote    = fsEmpNotes[emp.id] || '';
-    return (
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => !isDisabled && onToggle(emp.id)}
-          disabled={isDisabled}
-          className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 transition-all active:scale-[0.98] ${
-            isSelected
-              ? 'border-transparent'
-              : isDisabled
-                ? isDark ? 'border-slate-700 opacity-40' : 'border-gray-100 opacity-40'
-                : isDark ? 'border-slate-700 hover:border-slate-600' : 'border-gray-100 hover:border-gray-200'
-          }`}
-          style={isSelected ? { borderColor: empColor, backgroundColor: empColor + '18' } : {}}
-        >
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-            style={{ backgroundColor: empColor }}
-          >
-            {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+        const empColor   = getDeptColorByRole(emp.role, emp.color);
+        return (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onToggle(emp.id)}
+              className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 transition-all active:scale-[0.98] ${
+                isSelected
+                  ? 'border-transparent'
+                  : isDark ? 'border-slate-700 hover:border-slate-600' : 'border-gray-100 hover:border-gray-200'
+              }`}
+              style={isSelected ? { borderColor: empColor, backgroundColor: empColor + '18' } : {}}
+            >
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                style={{ backgroundColor: empColor }}
+              >
+                {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+              </div>
+              <div className="flex-1 text-left min-w-0">
+                <p className={`font-semibold text-sm truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{emp.name}</p>
+                <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
+                  {emp.role}
+                </p>
+              </div>
+            </button>
           </div>
-          <div className="flex-1 text-left min-w-0">
-            <p className={`font-semibold text-sm truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{emp.name}</p>
-            <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-              {emp.role}
-              {empNote && <span className="ml-1 text-amber-500">· 💬</span>}
-            </p>
-          </div>
-          <div
-            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-              isSelected ? 'text-white text-xs font-bold' : isDark ? 'border-slate-600' : 'border-gray-300'
-            }`}
-            style={isSelected ? { backgroundColor: empColor, borderColor: empColor } : {}}
-          >
-            {isSelected && '✓'}
-          </div>
-        </button>
-      </div>
-    );
   };
 
   return (
