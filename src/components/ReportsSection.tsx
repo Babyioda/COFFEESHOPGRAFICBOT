@@ -140,7 +140,6 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
     const newWidgets = { ...widgets, [widget]: !widgets[widget] };
     setWidgets(newWidgets);
     localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
-    setShowForm(false);
   };
 
   const card      = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
@@ -178,7 +177,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   };
 
   const handleGenerate = () => {
-    // Отчёты выручки и тсветовок не требуют linkedEmpId
+    // Отчёты выручки не требуют linkedEmpId
     if (reportType === 'revenue') {
       const val = parseFloat(revenueInput);
       if (!val || val <= 0) return;
@@ -187,7 +186,17 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       const newHistory = [historyEntry, ...revenueHistory].slice(0, 50);
       setRevenueHistory(newHistory);
       localStorage.setItem('sf_revenue_history', JSON.stringify(newHistory));
+      
+      // Добавляем виджет
+      if (!widgets.revenue) {
+        const newWidgets = { ...widgets, revenue: true };
+        setWidgets(newWidgets);
+        localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
+      }
+      
       setRevenueInput('');
+      setShowForm(false);
+      setReportType('shifts');
       return;
     }
 
@@ -204,7 +213,16 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       };
       const next = [result, ...reports].slice(0, 20);
       setReports(next); localStorage.setItem('sf_reports', JSON.stringify(next));
+      
+      // Добавляем виджет
+      if (!widgets.carts) {
+        const newWidgets = { ...widgets, carts: true };
+        setWidgets(newWidgets);
+        localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
+      }
+      
       setShowForm(false); setSelected(result); setCartsInput('');
+      setReportType('shifts');
       return;
     }
 
@@ -266,6 +284,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
     setReports(next);
     localStorage.setItem('sf_reports', JSON.stringify(next));
     setSelected(result);
+    setShowForm(false);
     setReportType('shifts');
   };
 
@@ -461,8 +480,443 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   return (
     <div className="space-y-4 pb-6">
 
+  // ── Список отчётов + форма ───────────────────────────────────────
+  return (
+    <div className="space-y-4 pb-6">
+
+      {/* Кнопка «+» для добавления */}
+      {!showForm && (
+        <button
+          onClick={() => setShowForm(true)}
+          className="w-full py-5 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm shadow-md active:scale-95 transition-all flex flex-col items-center gap-1"
+        >
+          <span className="text-3xl leading-none">+</span>
+          <span>Добавить отчёт</span>
+        </button>
+      )}
+
+      {/* Меню выбора типов отчетов */}
+      {showForm && !reportType && (
+        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
+          <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
+            <h3 className={`font-bold text-sm ${lbl}`}>📊 Выбери что добавить</h3>
+            <button onClick={() => setShowForm(false)} className={`text-xl leading-none ${sub} active:scale-90`}>×</button>
+          </div>
+
+          <div className="p-4 space-y-2">
+            {/* Выручка */}
+            <button
+              onClick={() => setReportType('revenue')}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
+                isDark ? 'border-slate-700 bg-slate-700/40 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'
+              }`}
+            >
+              <span className="text-xl">📈</span>
+              <div className="flex-1 text-left">
+                <p className={`text-sm font-semibold ${lbl}`}>
+                  Подсчёт выручки
+                </p>
+                <p className={`text-xs ${sub}`}>2.5% от суммы выручки</p>
+              </div>
+              <span className={`text-sm ${sub}`}>›</span>
+            </button>
+
+            {/* Тележки */}
+            <button
+              onClick={() => setReportType('carts')}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
+                isDark ? 'border-slate-700 bg-slate-700/40 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'
+              }`}
+            >
+              <span className="text-xl">🛒</span>
+              <div className="flex-1 text-left">
+                <p className={`text-sm font-semibold ${lbl}`}>
+                  Подсчёт тележек
+                </p>
+                <p className={`text-xs ${sub}`}>Количество тележек × 260 ₽</p>
+              </div>
+              <span className={`text-sm ${sub}`}>›</span>
+            </button>
+
+            <div className={`my-3 h-px ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
+
+            {/* Остальные отчеты */}
+            {REPORT_TYPES.filter(rt => rt.id !== 'revenue' && rt.id !== 'carts').map(rt => (
+              <button
+                key={rt.id}
+                onClick={() => { setReportType(rt.id); setShiftFilter('all'); setSelectedRole(''); setIncludeFuture(false); }}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
+                  isDark ? 'border-slate-700 bg-slate-700/40 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'
+                }`}
+              >
+                <span className="text-xl">{rt.icon}</span>
+                <div className="flex-1 text-left">
+                  <p className={`text-sm font-semibold ${lbl}`}>
+                    {rt.label}
+                  </p>
+                  <p className={`text-xs ${sub}`}>{rt.desc}</p>
+                </div>
+                <span className={`text-sm ${sub}`}>›</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Форма для отчетов (все типы) */}
+      {showForm && reportType && (
+        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
+          <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
+            <h3 className={`font-bold text-sm ${lbl}`}>📊 Новый отчёт</h3>
+            <button onClick={() => { setShowForm(false); setReportType('shifts'); }} className={`text-xl leading-none ${sub} active:scale-90`}>×</button>
+          </div>
+
+          <div className="p-4 space-y-5">
+
+            <button
+              onClick={() => setReportType('shifts' as ReportType)}
+              className={`flex items-center gap-2 text-sm font-semibold active:scale-95 ${sub}`}
+            >
+              ← Назад к типам
+            </button>
+
+            {/* ─── ФОРМА ВЫРУЧКИ ─── */}
+            {reportType === 'revenue' && (
+              <div>
+                <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${sub}`}>Размер выручки</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="number"
+                    value={revenueInput}
+                    onChange={e => setRevenueInput(e.target.value)}
+                    placeholder="100000"
+                    className={`flex-1 text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 ${inp}`}
+                  />
+                </div>
+                {revenueInput && parseFloat(revenueInput) > 0 && (
+                  <div className={`rounded-xl p-3 flex items-center justify-between mb-4 ${
+                    isDark ? 'bg-amber-900/30 border border-amber-700/40' : 'bg-amber-50 border border-amber-200'
+                  }`}>
+                    <p className={`text-xs ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>2.5% от выручки:</p>
+                    <p className={`text-base font-extrabold ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
+                      {Math.round(parseFloat(revenueInput) * 0.025).toLocaleString('ru-RU')} ₽
+                    </p>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    const val = parseFloat(revenueInput);
+                    if (val && val > 0) {
+                      const result = Math.round(val * 0.025);
+                      const historyEntry = { date: new Date().toISOString(), value: val, result };
+                      const newHistory = [historyEntry, ...revenueHistory].slice(0, 50);
+                      setRevenueHistory(newHistory);
+                      localStorage.setItem('sf_revenue_history', JSON.stringify(newHistory));
+                      
+                      // Добавляем виджет
+                      if (!widgets.revenue) {
+                        const newWidgets = { ...widgets, revenue: true };
+                        setWidgets(newWidgets);
+                        localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
+                      }
+                      
+                      setRevenueInput('');
+                      setShowForm(false);
+                      setReportType('shifts');
+                    }
+                  }}
+                  disabled={!revenueInput || parseFloat(revenueInput) <= 0}
+                  className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Сохранить отчёт
+                </button>
+              </div>
+            )}
+
+            {/* ─── ФОРМА ТЕЛЕЖЕК ─── */}
+            {reportType === 'carts' && (
+              <div>
+                <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${sub}`}>Количество тележек</p>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <button
+                    onClick={() => setCartsInput(String(Math.max(0, parseInt(cartsInput || '0') - 1)))}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border transition-all active:scale-90 ${
+                      isDark ? 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    −
+                  </button>
+                  <div className="flex-1 text-center">
+                    <p className={`text-3xl font-extrabold ${lbl}`}>{cartsInput || '0'}</p>
+                    <p className={`text-xs mt-1 ${sub}`}>тележек</p>
+                  </div>
+                  <button
+                    onClick={() => setCartsInput(String(parseInt(cartsInput || '0') + 1))}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border transition-all active:scale-90 ${
+                      isDark ? 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    +
+                  </button>
+                </div>
+                {cartsInput && parseInt(cartsInput) > 0 && (
+                  <div className={`mt-3 rounded-xl p-3 flex items-center justify-between mb-4 ${
+                    isDark ? 'bg-sky-900/30 border border-sky-700/40' : 'bg-sky-50 border border-sky-200'
+                  }`}>
+                    <p className={`text-xs ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>
+                      {parseInt(cartsInput)} × 260 ₽:
+                    </p>
+                    <p className={`text-base font-extrabold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>
+                      {(parseInt(cartsInput) * 260).toLocaleString('ru-RU')} ₽
+                    </p>
+                  </div>
+                )}
+                <button
+                  onClick={() => {
+                    const val = parseInt(cartsInput);
+                    if (!val || val <= 0) return;
+                    const result: ReportResult = {
+                      id: Date.now().toString(), createdAt: new Date().toISOString(),
+                      type: 'carts', shiftFilter: 'all', dateFrom, dateTo,
+                      hourlyRate: 0, selectedRole: '', totalShifts: 0,
+                      countByType: { all: 0, daily: 0, day: 0, night: 0 },
+                      totalHours: 0, income: 0, shifts: [],
+                      cartsInput: val, cartsResult: val * 260,
+                    };
+                    const next = [result, ...reports].slice(0, 20);
+                    setReports(next); localStorage.setItem('sf_reports', JSON.stringify(next));
+                    
+                    // Добавляем виджет
+                    if (!widgets.carts) {
+                      const newWidgets = { ...widgets, carts: true };
+                      setWidgets(newWidgets);
+                      localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
+                    }
+                    
+                    setCartsInput('');
+                    setShowForm(false);
+                    setReportType('shifts');
+                  }}
+                  disabled={!cartsInput || parseInt(cartsInput) <= 0}
+                  className="w-full py-3.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Сохранить отчёт
+                </button>
+              </div>
+            )}
+
+            {/* ─── ФОРМА СМЕН/ЧАСОВ/ДОХОДА ─── */}
+            {(reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
+              <>
+                {/* Фильтр по типу смены — только для «Смены» */}
+                {reportType === 'shifts' && (
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Тип смен</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SHIFT_FILTERS.map(sf => (
+                        <button
+                          key={sf.id}
+                          onClick={() => setShiftFilter(sf.id)}
+                          className={`py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 border ${
+                            shiftFilter === sf.id
+                              ? `${sf.bg} text-white border-transparent shadow-sm`
+                              : isDark ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-gray-50 border-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {sf.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Период — только для смен/часов/дохода */}
+                {(reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Период</p>
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div>
+                        <p className={`text-xs mb-1 ${sub}`}>С</p>
+                        <input
+                          type="date" value={dateFrom}
+                          onChange={e => setDateFrom(e.target.value)}
+                          className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
+                        />
+                      </div>
+                      <div>
+                        <p className={`text-xs mb-1 ${sub}`}>По</p>
+                        <input
+                          type="date" value={dateTo}
+                          onChange={e => setDateTo(e.target.value)}
+                          className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {([
+                        { label: 'Этот месяц',  type: 'current' as const },
+                        { label: 'Прош. месяц', type: 'prev'    as const },
+                        { label: '3 месяца',    type: 'three'   as const },
+                      ]).map(q => (
+                        <button
+                          key={q.type}
+                          onClick={() => setQuickPeriod(q.type)}
+                          className={`flex-1 text-[10px] font-semibold py-1.5 rounded-lg border transition-all active:scale-95 ${
+                            isDark ? 'bg-slate-700 border-slate-600 text-slate-400' : 'bg-gray-50 border-gray-200 text-gray-500'
+                          }`}
+                        >
+                          {q.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Переключатель "Учитывать будущие смены" — для часов и дохода */}
+                {(reportType === 'hours' || reportType === 'income') && (
+                  <div>
+                    <label className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all active:scale-[0.98]" style={{
+                      borderColor: includeFuture ? (isDark ? '#4f46e5' : '#818cf8') : (isDark ? '#374151' : '#e5e7eb'),
+                      background: includeFuture ? (isDark ? 'rgba(79, 70, 229, 0.1)' : 'rgba(129, 140, 248, 0.05)') : 'transparent'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={includeFuture}
+                        onChange={e => setIncludeFuture(e.target.checked)}
+                        className="w-5 h-5 rounded cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <p className={`text-sm font-semibold ${lbl}`}>Учитывать будущие смены</p>
+                        <p className={`text-xs ${sub}`}>Включить смены, которые еще не происходили</p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Выбор должности — только для «Доход» */}
+                {reportType === 'income' && (
+                  <div>
+                    <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Должность и ставка</p>
+                    {empRates.length === 0 ? (
+                      <div className={`rounded-xl p-3 border text-center ${isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'}`}>
+                        <p className={`text-xs ${sub}`}>⚠️ Ставка для вашей должности не найдена</p>
+                      </div>
+                    ) : empRates.length === 1 ? (
+                      <div className={`rounded-xl p-3 border flex items-center justify-between ${
+                        isDark ? 'border-indigo-500 bg-indigo-900/40' : 'border-indigo-400 bg-indigo-50'
+                      }`}>
+                        <div>
+                          <p className={`text-sm font-semibold ${lbl}`}>{empRates[0].role}</p>
+                          <p className={`text-xs ${sub}`}>{empRates[0].rate} ₽/ч</p>
+                        </div>
+                        <span className="text-indigo-500 font-bold text-lg">✓</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {empRates.map(({ role, rate }) => (
+                          <button
+                            key={role}
+                            onClick={() => setSelectedRole(role)}
+                            className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all active:scale-[0.98] ${
+                              selectedRole === role || (selectedRole === '' && empRates[0].role === role)
+                                ? isDark ? 'border-indigo-500 bg-indigo-900/40' : 'border-indigo-400 bg-indigo-50'
+                                : isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'
+                            }`}
+                          >
+                            <div className="text-left">
+                              <p className={`text-sm font-semibold ${lbl}`}>{role}</p>
+                              <p className={`text-xs ${sub}`}>{rate} ₽/ч</p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                              selectedRole === role || (selectedRole === '' && empRates[0].role === role)
+                                ? 'border-indigo-500 bg-indigo-500'
+                                : isDark ? 'border-slate-600' : 'border-gray-300'
+                            }`}>
+                              {(selectedRole === role || (selectedRole === '' && empRates[0].role === role)) && (
+                                <div className="w-2 h-2 rounded-full bg-white" />
+                              )}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {/* Пометка */}
+                    <div className={`mt-2 rounded-xl p-2.5 flex items-start gap-2 ${
+                      isDark ? 'bg-amber-900/20 border border-amber-700/40' : 'bg-amber-50 border border-amber-200'
+                    }`}>
+                      <span className="text-sm">⚠️</span>
+                      <p className={`text-[11px] leading-relaxed ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
+                        Сумма является только почасовым расчётом и не включает удержания и прочие начисления.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleGenerate}
+                  disabled={!canGenerate()}
+                  className="w-full py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Создать отчёт →
+                </button>
+
+                {!linkedEmpId && (reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
+                  <p className={`text-xs text-center ${sub}`}>
+                    ⚠️ Сначала привяжи аккаунт в профиле
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Список сохранённых */}
+      {reports.length > 0 && !showForm && (
+        <div className="space-y-2">
+          <p className={`text-xs font-bold uppercase tracking-wide px-1 ${sub}`}>Сохранённые отчёты</p>
+          {reports.map(r => {
+            const icons: Record<ReportType, string>  = { income: '💰', hours: '⏱️', shifts: '📅', revenue: '📈', carts: '🛒' };
+            const colors: Record<ReportType, string> = { income: '#059669', hours: '#2563eb', shifts: '#7c3aed', revenue: '#d97706', carts: '#0369a1' };
+            const mainValue = r.type === 'income'
+              ? `${r.income.toLocaleString('ru-RU')} ₽`
+              : r.type === 'hours'
+              ? `${r.totalHours} ч`
+              : r.type === 'revenue'
+              ? `${(r.revenueResult ?? 0).toLocaleString('ru-RU')} ₽`
+              : r.type === 'carts'
+              ? `${(r.cartsResult ?? 0).toLocaleString('ru-RU')} ₽`
+              : `${r.totalShifts} смен`;
+            const subText = r.type === 'revenue'
+              ? `Выручка: ${(r.revenueInput ?? 0).toLocaleString('ru-RU')} ₽`
+              : r.type === 'carts'
+              ? `${r.cartsInput} тележек`
+              : `${formatDate(r.dateFrom)} — ${formatDate(r.dateTo)}`;
+            return (
+              <button
+                key={r.id}
+                onClick={() => setSelected(r)}
+                className={`w-full flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition-all active:scale-[0.98] ${card}`}
+              >
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                  style={{ backgroundColor: colors[r.type] + '20' }}
+                >
+                  {icons[r.type]}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-bold" style={{ color: colors[r.type] }}>{mainValue}</p>
+                  <p className={`text-xs ${sub}`}>{subText}</p>
+                </div>
+                <span className={`text-sm ${sub}`}>›</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ВИДЖЕТ ВЫРУЧКИ */}
-      {widgets.revenue && (
+      {widgets.revenue && !showForm && (
         <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
           <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
             <h3 className={`font-bold text-sm ${lbl}`}>📈 Выручка</h3>
@@ -503,45 +957,11 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                 })}
               </div>
             ) : (
-              <div className="space-y-3">
-                <div>
-                  <p className={`text-xs mb-2 ${sub}`}>Размер выручки</p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={revenueInput}
-                      onChange={e => setRevenueInput(e.target.value)}
-                      placeholder="100000"
-                      className={`flex-1 text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 ${inp}`}
-                    />
-                    <button
-                      onClick={() => {
-                        const val = parseFloat(revenueInput);
-                        if (val && val > 0) {
-                          const result = Math.round(val * 0.025);
-                          const historyEntry = { date: new Date().toISOString(), value: val, result };
-                          const newHistory = [historyEntry, ...revenueHistory].slice(0, 50);
-                          setRevenueHistory(newHistory);
-                          localStorage.setItem('sf_revenue_history', JSON.stringify(newHistory));
-                          setRevenueInput('');
-                        }
-                      }}
-                      className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm active:scale-95 transition-all"
-                    >
-                      OK
-                    </button>
-                  </div>
-                </div>
-                {revenueInput && parseFloat(revenueInput) > 0 && (
-                  <div className={`rounded-xl p-3 flex items-center justify-between ${
-                    isDark ? 'bg-amber-900/30 border border-amber-700/40' : 'bg-amber-50 border border-amber-200'
-                  }`}>
-                    <p className={`text-xs ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>2.5% от выручки:</p>
-                    <p className={`text-base font-extrabold ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                      {Math.round(parseFloat(revenueInput) * 0.025).toLocaleString('ru-RU')} ₽
-                    </p>
-                  </div>
-                )}
+              <div className="space-y-2">
+                <p className={`text-xs ${sub}`}>Последние добавления:</p>
+                {revenueHistory.length === 0 ? (
+                  <p className={`text-xs text-center ${sub}`}>Нет записей в истории</p>
+                ) : null}
               </div>
             )}
           </div>
@@ -549,7 +969,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       )}
 
       {/* ВИДЖЕТ ТЕЛЕЖЕК */}
-      {widgets.carts && (
+      {widgets.carts && !showForm && (
         <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
           <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
             <h3 className={`font-bold text-sm ${lbl}`}>🛒 Тележки</h3>
@@ -617,319 +1037,6 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
               Сохранить отчёт
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Кнопка «+» для добавления */}
-      {!showForm && (
-        <button
-          onClick={() => setShowForm(true)}
-          className="w-full py-5 rounded-2xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm shadow-md active:scale-95 transition-all flex flex-col items-center gap-1"
-        >
-          <span className="text-3xl leading-none">+</span>
-          <span>Добавить отчёт</span>
-        </button>
-      )}
-
-      {/* Меню выбора типов отчетов */}
-      {showForm && !reportType && (
-        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
-          <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
-            <h3 className={`font-bold text-sm ${lbl}`}>📊 Выбери что добавить</h3>
-            <button onClick={() => setShowForm(false)} className={`text-xl leading-none ${sub} active:scale-90`}>×</button>
-          </div>
-
-          <div className="p-4 space-y-2">
-            {/* Выручка */}
-            <button
-              onClick={() => toggleWidget('revenue')}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                widgets.revenue
-                  ? isDark ? 'border-amber-500 bg-amber-900/40' : 'border-amber-400 bg-amber-50'
-                  : isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'
-              }`}
-            >
-              <span className="text-xl">📈</span>
-              <div className="flex-1 text-left">
-                <p className={`text-sm font-semibold ${widgets.revenue ? 'text-amber-500' : lbl}`}>
-                  Подсчёт выручки
-                </p>
-                <p className={`text-xs ${sub}`}>2.5% от суммы выручки</p>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                widgets.revenue ? 'border-amber-500 bg-amber-500' : isDark ? 'border-slate-600' : 'border-gray-300'
-              }`}>
-                {widgets.revenue && <div className="w-2 h-2 rounded-full bg-white" />}
-              </div>
-            </button>
-
-            {/* Тележки */}
-            <button
-              onClick={() => toggleWidget('carts')}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                widgets.carts
-                  ? isDark ? 'border-sky-500 bg-sky-900/40' : 'border-sky-400 bg-sky-50'
-                  : isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'
-              }`}
-            >
-              <span className="text-xl">🛒</span>
-              <div className="flex-1 text-left">
-                <p className={`text-sm font-semibold ${widgets.carts ? 'text-sky-500' : lbl}`}>
-                  Подсчёт тележек
-                </p>
-                <p className={`text-xs ${sub}`}>Количество тележек × 260 ₽</p>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                widgets.carts ? 'border-sky-500 bg-sky-500' : isDark ? 'border-slate-600' : 'border-gray-300'
-              }`}>
-                {widgets.carts && <div className="w-2 h-2 rounded-full bg-white" />}
-              </div>
-            </button>
-
-            <div className={`my-3 h-px ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
-
-            {/* Остальные отчеты */}
-            {REPORT_TYPES.filter(rt => rt.id !== 'revenue' && rt.id !== 'carts').map(rt => (
-              <button
-                key={rt.id}
-                onClick={() => { setReportType(rt.id); setShiftFilter('all'); setSelectedRole(''); setIncludeFuture(false); }}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                  isDark ? 'border-slate-700 bg-slate-700/40 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'
-                }`}
-              >
-                <span className="text-xl">{rt.icon}</span>
-                <div className="flex-1 text-left">
-                  <p className={`text-sm font-semibold ${lbl}`}>
-                    {rt.label}
-                  </p>
-                  <p className={`text-xs ${sub}`}>{rt.desc}</p>
-                </div>
-                <span className={`text-sm ${sub}`}>›</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Форма для отчетов (смены, часы, доход) */}
-      {showForm && reportType && (
-        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
-          <div className={`px-4 py-3.5 border-b flex items-center justify-between ${divBorder}`}>
-            <h3 className={`font-bold text-sm ${lbl}`}>📊 Новый отчёт</h3>
-            <button onClick={() => { setShowForm(false); setReportType('shifts'); }} className={`text-xl leading-none ${sub} active:scale-90`}>×</button>
-          </div>
-
-          <div className="p-4 space-y-5">
-
-            <button
-              onClick={() => setReportType('shifts' as ReportType)}
-              className={`flex items-center gap-2 text-sm font-semibold active:scale-95 ${sub}`}
-            >
-              ← Назад к типам
-            </button>
-
-            {/* Фильтр по типу смены — только для «Смены» */}
-            {reportType === 'shifts' && (
-              <div>
-                <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Тип смен</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {SHIFT_FILTERS.map(sf => (
-                    <button
-                      key={sf.id}
-                      onClick={() => setShiftFilter(sf.id)}
-                      className={`py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-95 border ${
-                        shiftFilter === sf.id
-                          ? `${sf.bg} text-white border-transparent shadow-sm`
-                          : isDark ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-gray-50 border-gray-200 text-gray-600'
-                      }`}
-                    >
-                      {sf.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Период — только для смен/часов/дохода */}
-            {(reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
-              <div>
-                <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Период</p>
-                <div className="grid grid-cols-2 gap-2 mb-2">
-                  <div>
-                    <p className={`text-xs mb-1 ${sub}`}>С</p>
-                    <input
-                      type="date" value={dateFrom}
-                      onChange={e => setDateFrom(e.target.value)}
-                      className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
-                    />
-                  </div>
-                  <div>
-                    <p className={`text-xs mb-1 ${sub}`}>По</p>
-                    <input
-                      type="date" value={dateTo}
-                      onChange={e => setDateTo(e.target.value)}
-                      className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-1.5">
-                  {([
-                    { label: 'Этот месяц',  type: 'current' as const },
-                    { label: 'Прош. месяц', type: 'prev'    as const },
-                    { label: '3 месяца',    type: 'three'   as const },
-                  ]).map(q => (
-                    <button
-                      key={q.type}
-                      onClick={() => setQuickPeriod(q.type)}
-                      className={`flex-1 text-[10px] font-semibold py-1.5 rounded-lg border transition-all active:scale-95 ${
-                        isDark ? 'bg-slate-700 border-slate-600 text-slate-400' : 'bg-gray-50 border-gray-200 text-gray-500'
-                      }`}
-                    >
-                      {q.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Переключатель "Учитывать будущие смены" — для часов и дохода */}
-            {(reportType === 'hours' || reportType === 'income') && (
-              <div>
-                <label className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all active:scale-[0.98]" style={{
-                  borderColor: includeFuture ? (isDark ? '#4f46e5' : '#818cf8') : (isDark ? '#374151' : '#e5e7eb'),
-                  background: includeFuture ? (isDark ? 'rgba(79, 70, 229, 0.1)' : 'rgba(129, 140, 248, 0.05)') : 'transparent'
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={includeFuture}
-                    onChange={e => setIncludeFuture(e.target.checked)}
-                    className="w-5 h-5 rounded cursor-pointer"
-                  />
-                  <div className="flex-1">
-                    <p className={`text-sm font-semibold ${lbl}`}>Учитывать будущие смены</p>
-                    <p className={`text-xs ${sub}`}>Включить смены, которые еще не происходили</p>
-                  </div>
-                </label>
-              </div>
-            )}
-
-            {/* Выбор должности — только для «Доход» */}
-            {reportType === 'income' && (
-              <div>
-                <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${sub}`}>Должность и ставка</p>
-                {empRates.length === 0 ? (
-                  <div className={`rounded-xl p-3 border text-center ${isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'}`}>
-                    <p className={`text-xs ${sub}`}>⚠️ Ставка для вашей должности не найдена</p>
-                  </div>
-                ) : empRates.length === 1 ? (
-                  <div className={`rounded-xl p-3 border flex items-center justify-between ${
-                    isDark ? 'border-indigo-500 bg-indigo-900/40' : 'border-indigo-400 bg-indigo-50'
-                  }`}>
-                    <div>
-                      <p className={`text-sm font-semibold ${lbl}`}>{empRates[0].role}</p>
-                      <p className={`text-xs ${sub}`}>{empRates[0].rate} ₽/ч</p>
-                    </div>
-                    <span className="text-indigo-500 font-bold text-lg">✓</span>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {empRates.map(({ role, rate }) => (
-                      <button
-                        key={role}
-                        onClick={() => setSelectedRole(role)}
-                        className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                          selectedRole === role || (selectedRole === '' && empRates[0].role === role)
-                            ? isDark ? 'border-indigo-500 bg-indigo-900/40' : 'border-indigo-400 bg-indigo-50'
-                            : isDark ? 'border-slate-700 bg-slate-700/40' : 'border-gray-200 bg-gray-50'
-                        }`}
-                      >
-                        <div className="text-left">
-                          <p className={`text-sm font-semibold ${lbl}`}>{role}</p>
-                          <p className={`text-xs ${sub}`}>{rate} ₽/ч</p>
-                        </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          selectedRole === role || (selectedRole === '' && empRates[0].role === role)
-                            ? 'border-indigo-500 bg-indigo-500'
-                            : isDark ? 'border-slate-600' : 'border-gray-300'
-                        }`}>
-                          {(selectedRole === role || (selectedRole === '' && empRates[0].role === role)) && (
-                            <div className="w-2 h-2 rounded-full bg-white" />
-                          )}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {/* Пометка */}
-                <div className={`mt-2 rounded-xl p-2.5 flex items-start gap-2 ${
-                  isDark ? 'bg-amber-900/20 border border-amber-700/40' : 'bg-amber-50 border border-amber-200'
-                }`}>
-                  <span className="text-sm">⚠️</span>
-                  <p className={`text-[11px] leading-relaxed ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>
-                    Сумма является только почасовым расчётом и не включает удержания и прочие начисления.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={handleGenerate}
-              disabled={!canGenerate()}
-              className="w-full py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Создать отчёт →
-            </button>
-
-            {!linkedEmpId && (reportType === 'shifts' || reportType === 'hours' || reportType === 'income') && (
-              <p className={`text-xs text-center ${sub}`}>
-                ⚠️ Сначала привяжи аккаунт в профиле
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Список сохранённых */}
-      {reports.length > 0 && !showForm && (
-        <div className="space-y-2">
-          <p className={`text-xs font-bold uppercase tracking-wide px-1 ${sub}`}>Сохранённые отчёты</p>
-          {reports.map(r => {
-            const icons: Record<ReportType, string>  = { income: '💰', hours: '⏱️', shifts: '📅', revenue: '📈', carts: '🛒' };
-            const colors: Record<ReportType, string> = { income: '#059669', hours: '#2563eb', shifts: '#7c3aed', revenue: '#d97706', carts: '#0369a1' };
-            const mainValue = r.type === 'income'
-              ? `${r.income.toLocaleString('ru-RU')} ₽`
-              : r.type === 'hours'
-              ? `${r.totalHours} ч`
-              : r.type === 'revenue'
-              ? `${(r.revenueResult ?? 0).toLocaleString('ru-RU')} ₽`
-              : r.type === 'carts'
-              ? `${(r.cartsResult ?? 0).toLocaleString('ru-RU')} ₽`
-              : `${r.totalShifts} смен`;
-            const subText = r.type === 'revenue'
-              ? `Выручка: ${(r.revenueInput ?? 0).toLocaleString('ru-RU')} ₽`
-              : r.type === 'carts'
-              ? `${r.cartsInput} тележек`
-              : `${formatDate(r.dateFrom)} — ${formatDate(r.dateTo)}`;
-            return (
-              <button
-                key={r.id}
-                onClick={() => setSelected(r)}
-                className={`w-full flex items-center gap-3 p-4 rounded-2xl border shadow-sm transition-all active:scale-[0.98] ${card}`}
-              >
-                <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                  style={{ backgroundColor: colors[r.type] + '20' }}
-                >
-                  {icons[r.type]}
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-bold" style={{ color: colors[r.type] }}>{mainValue}</p>
-                  <p className={`text-xs ${sub}`}>{subText}</p>
-                </div>
-                <span className={`text-sm ${sub}`}>›</span>
-              </button>
-            );
-          })}
         </div>
       )}
 

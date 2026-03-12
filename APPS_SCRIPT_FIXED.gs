@@ -1,5 +1,5 @@
 // ========== НАСТРОЙКИ ==========
-var BOT_TOKEN = '8495856123:AAHE32o7Sj1Oxp9qtc5gmQA4LcaWeD3U8Fs';
+var BOT_TOKEN = '8690029496:AAF8AS5SuabgoLbIzNkYqxrYotS6k7zvlNk';
 
 // ========== УВЕДОМЛЕНИЯ ОБ ИЗМЕНЕНИЯХ ==========
 function onEdit(e) {
