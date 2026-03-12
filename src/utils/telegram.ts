@@ -110,22 +110,26 @@ export function openTelegramChat(username: string) {
 // ── Синхронизация с Apps Script ──────────────────────────────────
 
 const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytWQyI60qdibQQCCMklCGS6IzniSYTZuNOkqCpzYP8P9fxlXchVuX2679MMwAQqJdI/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
 
 /** Синхронизировать привязку tgId → empName в Google Sheets (лист Employees) */
 export async function syncTgLink(empName: string, tgId: number): Promise<void> {
   const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
   if (!scriptUrl) return;
   try {
+    const payload = { action: 'link', empName, tgId: String(tgId) };
+    console.log('syncTgLink -> POST', scriptUrl, payload);
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'link', empName, tgId: String(tgId) }),
+      body: JSON.stringify(payload),
     });
+    let text = '';
+    try { text = await response.text(); } catch (e) { /* ignore */ }
     if (!response.ok) {
-      console.error(`❌ syncTgLink ошибка: ${response.status} ${response.statusText}`);
+      console.error(`❌ syncTgLink ошибка: ${response.status} ${response.statusText}`, text);
     } else {
-      console.log(`✅ syncTgLink успешно: ${empName} (${tgId})`);
+      console.log(`✅ syncTgLink успешно: ${empName} (${tgId})`, response.status, text);
     }
   } catch (err) {
     console.error('❌ syncTgLink ошибка сети:', err);

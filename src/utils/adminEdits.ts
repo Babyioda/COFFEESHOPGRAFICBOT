@@ -16,7 +16,7 @@ export interface EmpNote {
 const STORAGE_SHIFT_EDITS = 'sf_admin_shift_edits';
 const STORAGE_EMP_NOTES   = 'sf_admin_emp_notes';
 const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytWQyI60qdibQQCCMklCGS6IzniSYTZuNOkqCpzYP8P9fxlXchVuX2679MMwAQqJdI/exec';
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
 
 // ── Правки смен ─────────────────────────────────────────────────────
 
@@ -83,22 +83,26 @@ async function syncShiftEditToServer(edit: ShiftEdit): Promise<void> {
   const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
   if (!scriptUrl) return;
   try {
+    const payload = {
+      action: 'editshift',
+      empId: edit.empId,
+      date: edit.date,
+      customStart: edit.customStart,
+      customEnd: edit.customEnd,
+      note: edit.note,
+    };
+    console.log('syncShiftEditToServer -> POST', scriptUrl, payload);
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'editshift',
-        empId: edit.empId,
-        date: edit.date,
-        customStart: edit.customStart,
-        customEnd: edit.customEnd,
-        note: edit.note,
-      }),
+      body: JSON.stringify(payload),
     });
+    let text = '';
+    try { text = await response.text(); } catch (e) { /* ignore */ }
     if (!response.ok) {
-      console.error(`❌ syncShiftEdit ошибка: ${response.status} ${response.statusText}`);
+      console.error(`❌ syncShiftEdit ошибка: ${response.status} ${response.statusText}`, text);
     } else {
-      console.log(`✅ syncShiftEdit успешно: ${edit.empId} ${edit.date}`);
+      console.log(`✅ syncShiftEdit успешно: ${edit.empId} ${edit.date}`, response.status, text);
     }
   } catch (err) {
     console.error('❌ syncShiftEdit ошибка сети:', err);
@@ -112,19 +116,19 @@ async function syncShiftDeleteToServer(empId: string, date: string): Promise<voi
   const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
   if (!scriptUrl) return;
   try {
+    const payload = { action: 'deleteshift', empId, date };
+    console.log('syncShiftDeleteToServer -> POST', scriptUrl, payload);
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'deleteshift',
-        empId,
-        date,
-      }),
+      body: JSON.stringify(payload),
     });
+    let text = '';
+    try { text = await response.text(); } catch (e) { /* ignore */ }
     if (!response.ok) {
-      console.error(`❌ syncShiftDelete ошибка: ${response.status} ${response.statusText}`);
+      console.error(`❌ syncShiftDelete ошибка: ${response.status} ${response.statusText}`, text);
     } else {
-      console.log(`✅ syncShiftDelete успешно: ${empId} ${date}`);
+      console.log(`✅ syncShiftDelete успешно: ${empId} ${date}`, response.status, text);
     }
   } catch (err) {
     console.error('❌ syncShiftDelete ошибка сети:', err);
@@ -138,19 +142,19 @@ async function syncEmpNoteToServer(empId: string, note: string): Promise<void> {
   const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
   if (!scriptUrl) return;
   try {
+    const payload = { action: 'empnote', empId, note };
+    console.log('syncEmpNoteToServer -> POST', scriptUrl, payload);
     const response = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'empnote',
-        empId,
-        note,
-      }),
+      body: JSON.stringify(payload),
     });
+    let text = '';
+    try { text = await response.text(); } catch (e) { /* ignore */ }
     if (!response.ok) {
-      console.error(`❌ syncEmpNote ошибка: ${response.status} ${response.statusText}`);
+      console.error(`❌ syncEmpNote ошибка: ${response.status} ${response.statusText}`, text);
     } else {
-      console.log(`✅ syncEmpNote успешно: ${empId}`);
+      console.log(`✅ syncEmpNote успешно: ${empId}`, response.status, text);
     }
   } catch (err) {
     console.error('❌ syncEmpNote ошибка сети:', err);
