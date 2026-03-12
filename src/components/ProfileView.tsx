@@ -11,6 +11,7 @@ import {
 } from '../utils/telegram';
 import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
 import { fetchEmployeeNotes, testConnection } from '../utils/firebase';
+import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
@@ -80,19 +81,52 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   // preferences for linked employee
   const [showTelegramPref, setShowTelegramPref] = useState(false);
   const [birthdayInput, setBirthdayInput] = useState(''); // yyyy-mm-dd
+  const [manualUsername, setManualUsername] = useState(''); // manually entered @username
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
+  // Реалтайм-подписка на настройки сотрудника (день рождения, Telegram, username), правила и заметки
   useEffect(() => {
-    if (linkedEmp) {
-      const p = getEmpPrefs(linkedEmp.id) || {} as EmpPrefs;
+    if (!linkedEmp) return;
+    setPrefsLoaded(false);
+    // Подписка на все prefs
+    const unsubPrefs = watchEmpPrefs((allPrefs) => {
+      const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
       setShowTelegramPref(!!p.showTelegram);
       if (p.birthday) {
         setBirthdayInput(`2000-${p.birthday}`);
       } else {
         setBirthdayInput('');
       }
+      if (p.customUsername) {
+        setManualUsername(p.customUsername);
+      } else {
+        setManualUsername('');
+      }
       setPrefsLoaded(true);
-    }
+    });
+
+    // Подписка на employee rules (часы работы)
+    const unsubRules = watchEmpRules((allRules) => {
+      const rule = allRules.find(r => r.empId === linkedEmp.id);
+      if (rule && rule.hours) {
+        // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
+        // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
+      }
+    });
+
+    // Подписка на employee notes (заметки)
+    const unsubNotes = watchEmpNotes((allNotes) => {
+      const note = allNotes.find(n => n.empId === linkedEmp.id);
+      if (note) {
+        // Можно добавить setNoteText(note.note) если нужно live-отображение
+      }
+    });
+
+    return () => {
+      unsubPrefs && unsubPrefs();
+      unsubRules && unsubRules();
+      unsubNotes && unsubNotes();
+    };
   }, [linkedEmp]);
 
   useEffect(() => {
@@ -270,21 +304,41 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
                   type="checkbox"
                   checked={showTelegramPref}
                   onChange={e => {
-                    const val = e.target.checked;
-                    if (val && linkedEmp && !linkedEmp.tgUsername) {
-                      // don't allow
-                      alert('Невозможно включить: @username не указан в профиле');
-                      return;
-                    }
-                    setShowTelegramPref(val);
+                    setShowTelegramPref(e.target.checked);
                   }}
                 />
                 Показывать мой Telegram
               </label>
-              {showTelegramPref && linkedEmp && !linkedEmp.tgUsername && (
-                <p className="text-xs text-red-500 mt-1">Ошибка: @username не установлен</p>
+              {showTelegramPref && linkedEmp && !linkedEmp.tgUsername && !manualUsername && (
+                <p className="text-xs text-amber-500 mt-1">⚠️ Нужен @username (найди в параметрах профиля Telegram или добавь ниже)</p>
               )}
             </div>
+
+            {/* Manual username input */}
+            <div>
+              <label className={`text-xs font-semibold mb-1.5 block ${sub}`}>
+                @username {linkedEmp.tgUsername && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{backgroundColor: '#059669', color: 'white'}}>✓ из Telegram</span>}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualUsername}
+                  onChange={e => setManualUsername(e.target.value.replace(/^@/, '').trim())}
+                  placeholder="myusername"
+                  className={`flex-1 text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
+                />
+                {manualUsername && (
+                  <button
+                    onClick={() => setManualUsername('')}
+                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-red-500/20 text-red-500 flex items-center justify-center text-sm font-bold"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-500 mt-1">Если @username не в профиле Telegram, добавь его сюда вручную</p>
+            </div>
+
             <div>
               <label className={`text-xs font-semibold mb-1 block ${sub}`}>День рождения</label>
               <input
@@ -299,11 +353,19 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
               onClick={() => {
                 if (!linkedEmp) return;
                 const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
-                if (showTelegramPref && !linkedEmp.tgUsername) {
-                  alert('Невозможно включить показывать Telegram: username не задан');
+                // Allow saving birthday regardless of Telegram settings
+                // Check if Telegram is enabled and if we have a username (either from TG or manually entered)
+                const hasUsername = linkedEmp.tgUsername || manualUsername;
+                if (showTelegramPref && !hasUsername) {
+                  alert('⚠️ Для включения Telegram нужен @username. Можете найти его в параметрах профиля Telegram или добавить вручную.');
                   return;
                 }
-                saveEmpPrefs({ empId: linkedEmp.id, showTelegram: showTelegramPref, birthday: mmdd });
+                saveEmpPrefs({ 
+                  empId: linkedEmp.id, 
+                  showTelegram: showTelegramPref, 
+                  birthday: mmdd,
+                  customUsername: manualUsername || undefined,
+                });
                 // update object for immediate effect
                 linkedEmp.showTelegram = showTelegramPref;
                 linkedEmp.birthday = mmdd;

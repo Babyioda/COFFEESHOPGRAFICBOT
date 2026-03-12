@@ -170,6 +170,7 @@ export interface EmpPrefs {
   empId: string;
   showTelegram?: boolean;
   birthday?: string; // MM-DD
+  customUsername?: string; // manually entered @username
 }
 
 const STORAGE_EMP_PREFS = 'sf_emp_prefs';

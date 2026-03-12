@@ -187,6 +187,28 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       setRevenueHistory(newHistory);
       localStorage.setItem('sf_revenue_history', JSON.stringify(newHistory));
       
+      // Добавляем отчёт в список сохранённых отчётов
+      const reportEntry: ReportResult = {
+        id: Date.now().toString(), 
+        createdAt: new Date().toISOString(),
+        type: 'revenue', 
+        shiftFilter: 'all', 
+        dateFrom, 
+        dateTo,
+        hourlyRate: 0, 
+        selectedRole: '', 
+        totalShifts: 0,
+        countByType: { all: 0, daily: 0, day: 0, night: 0 },
+        totalHours: 0, 
+        income: 0, 
+        shifts: [],
+        revenueInput: val, 
+        revenueResult: result,
+      };
+      const next = [reportEntry, ...reports].slice(0, 20);
+      setReports(next);
+      localStorage.setItem('sf_reports', JSON.stringify(next));
+      
       // Добавляем виджет
       if (!widgets.revenue) {
         const newWidgets = { ...widgets, revenue: true };
@@ -197,6 +219,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       setRevenueInput('');
       setShowForm(false);
       setReportType(null);
+      setSelected(reportEntry);
       return;
     }
 
@@ -307,6 +330,12 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
     setReports(next);
     localStorage.setItem('sf_reports', JSON.stringify(next));
     if (selected?.id === id) setSelected(null);
+  };
+
+  const deleteRevenueEntry = (index: number) => {
+    const next = revenueHistory.filter((_, i) => i !== index);
+    setRevenueHistory(next);
+    localStorage.setItem('sf_revenue_history', JSON.stringify(next));
   };
 
   // ── Детальный отчёт ──────────────────────────────────────────────
@@ -978,12 +1007,20 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
                   const dateObj = new Date(entry.date);
                   const dateStr = `${dateObj.getDate()}.${String(dateObj.getMonth()+1).padStart(2,'0')} ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2,'0')}`;
                   return (
-                    <div key={i} className={`flex items-center justify-between p-2.5 rounded-lg ${isDark ? 'bg-slate-700/40' : 'bg-gray-50'}`}>
-                      <div>
+                    <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-amber-50 border-amber-200'}`}>
+                      <div className="flex-1">
                         <p className={`text-xs ${sub}`}>{dateStr}</p>
-                        <p className={`text-sm font-bold ${lbl}`}>{entry.value.toLocaleString('ru-RU')} ₽</p>
+                        <p className={`text-sm font-bold ${lbl}`}>{entry.value.toLocaleString('ru-RU')} ₽ → {entry.result.toLocaleString('ru-RU')} ₽</p>
                       </div>
-                      <p className="text-sm font-bold text-amber-600">2.5% = {entry.result.toLocaleString('ru-RU')} ₽</p>
+                      <button
+                        onClick={() => deleteRevenueEntry(i)}
+                        className={`ml-2 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-sm transition-all active:scale-90 ${
+                          isDark ? 'hover:bg-red-900/40 text-red-400' : 'hover:bg-red-100 text-red-600'
+                        }`}
+                        title="Удалить"
+                      >
+                        ×
+                      </button>
                     </div>
                   );
                 })}

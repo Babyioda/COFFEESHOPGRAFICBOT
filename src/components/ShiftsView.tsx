@@ -9,6 +9,7 @@ import {
   getEmpNote, loadShiftEdits, loadEmpNotes,
   getEmpRule,
 } from '../utils/adminEdits';
+import { fetchEmployeeNotes, fetchShiftNotes, watchEmployeeNotes, watchShiftNotes, watchEmpNotes, watchEmpRules, watchEmpPrefs } from '../utils/firebase';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS_RU_FULL = [
@@ -260,36 +261,40 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
 
   // Загружаем актуальные правки
   const shiftEdits = loadShiftEdits();
-  const empNotes   = loadEmpNotes();
+  // const empNotes   = loadEmpNotes(); // больше не нужно, используем fsEmpNotes
 
   const [fsEmpNotes, setFsEmpNotes] = useState<Record<string,string>>({});
   const [fsShiftNotes, setFsShiftNotes] = useState<Record<string,string>>({});
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      try {
-        const empMap: Record<string,string> = {};
-        const shiftMap: Record<string,string> = {};
-        await Promise.all(data.employees.map(async (emp) => {
-          try {
-            const ens = await fetchEmployeeNotes(emp.id);
-            if (ens && ens.length) empMap[emp.id] = ens[0].text;
-          } catch (e) {}
-          try {
-            const shiftId = `${emp.id}-${dateStr}`;
-            const sns = await fetchShiftNotes(shiftId);
-            if (sns && sns.length) shiftMap[emp.id] = sns[0].text;
-          } catch (e) {}
-        }));
+    // Реалтайм слушатели для заметок по сотрудникам и сменам
+    const unsubEmpNotes: Array<() => void> = [];
+    const unsubShiftNotes: Array<() => void> = [];
+    const empMap: Record<string,string> = {};
+    const shiftMap: Record<string,string> = {};
+    data.employees.forEach(emp => {
+      // Слушатель для employee_notes
+      const unsubEmp = watchEmployeeNotes(emp.id, (notes) => {
         if (!mounted) return;
-        setFsEmpNotes(empMap);
-        setFsShiftNotes(shiftMap);
-      } catch (e) {
-        // ignore
-      }
-    })();
-    return () => { mounted = false; };
+        empMap[emp.id] = notes[0]?.text || '';
+        setFsEmpNotes(prev => ({ ...prev, [emp.id]: empMap[emp.id] }));
+      });
+      unsubEmpNotes.push(unsubEmp);
+      // Слушатель для shift_notes
+      const shiftId = `${emp.id}-${dateStr}`;
+      const unsubShift = watchShiftNotes(shiftId, (notes) => {
+        if (!mounted) return;
+        shiftMap[emp.id] = notes[0]?.text || '';
+        setFsShiftNotes(prev => ({ ...prev, [emp.id]: shiftMap[emp.id] }));
+      });
+      unsubShiftNotes.push(unsubShift);
+    });
+    return () => {
+      mounted = false;
+      unsubEmpNotes.forEach(fn => fn && fn());
+      unsubShiftNotes.forEach(fn => fn && fn());
+    };
   }, [data.employees, dateStr]);
 
   const getCustomTimes = (empId: string) => {
@@ -679,7 +684,7 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
     const isSelected = selectedIds.includes(emp.id);
     const isDisabled = !isSelected && selectedIds.length >= 3;
     const empColor   = getDeptColorByRole(emp.role, emp.color);
-    const empNote    = getEmpNote(emp.id);
+    const empNote    = fsEmpNotes[emp.id] || '';
     return (
       <div className="flex items-center gap-2">
         <button

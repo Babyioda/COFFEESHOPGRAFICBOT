@@ -597,3 +597,48 @@ export async function deleteUserLink(uid: string): Promise<void> {
     console.error('[Firebase] Failed to delete user link:', err);
   }
 }
+
+// Реалтайм слушатель для заметок по сотрудникам (emp_notes)
+export function watchEmpNotes(cb: (items: EmpNoteDoc[]) => void) {
+  try {
+    return onSnapshot(collection(db, 'emp_notes'), (snap: any) => {
+      const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpNoteDoc));
+      cb(notes);
+    }, (err: any) => {
+      console.error('[Firebase] Watch error for emp_notes:', err);
+    });
+  } catch (err) {
+    console.error('[Firebase] Failed to set up watch for emp_notes:', err);
+    return () => {};
+  }
+}
+
+// Реалтайм слушатель для правил (emp_rules)
+export function watchEmpRules(cb: (items: EmpRuleDoc[]) => void) {
+  try {
+    return onSnapshot(collection(db, 'emp_rules'), (snap: any) => {
+      const rules = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpRuleDoc));
+      cb(rules);
+    }, (err: any) => {
+      console.error('[Firebase] Watch error for emp_rules:', err);
+    });
+  } catch (err) {
+    console.error('[Firebase] Failed to set up watch for emp_rules:', err);
+    return () => {};
+  }
+}
+
+// Реалтайм слушатель для дней рождения и Telegram (emp_prefs)
+export function watchEmpPrefs(cb: (items: EmpPrefsDoc[]) => void) {
+  try {
+    return onSnapshot(collection(db, 'emp_prefs'), (snap: any) => {
+      const prefs = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
+      cb(prefs);
+    }, (err: any) => {
+      console.error('[Firebase] Watch error for emp_prefs:', err);
+    });
+  } catch (err) {
+    console.error('[Firebase] Failed to set up watch for emp_prefs:', err);
+    return () => {};
+  }
+}
