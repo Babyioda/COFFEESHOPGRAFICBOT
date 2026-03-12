@@ -166,6 +166,8 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     return { employees: [], shifts: [], lastSync: new Date().toISOString(), sheetName: sheetTitle, month: detectedMonth, year: detectedYear };
   }
 
+  
+
   // === Парсим сотрудников ===
   const employeeMap = new Map<string, Employee>();
   const shifts: ShiftEntry[] = [];
@@ -218,22 +220,26 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       const shift = parsed.type;
       const hours = parsed.hours;
 
+      
+
       const existingIdx = shifts.findIndex(s => s.employeeId === emp!.id && s.date === isoDate);
 
+      // Числовые значения в ячейке считаем отработанными часами: сохраняем в поле hours,
+      // но не переводим автоматически в смену 'day'. Если парсер вернул реальную смену (не 'off'),
+      // она сохраняется как обычно.
       if (existingIdx !== -1) {
         const existing = shifts[existingIdx];
-        // Числа (hours > 0) — явно блокируют смену, перезаписываем на off
         if (hours && hours > 0) {
-          shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift: 'off', role: roleCell || undefined };
-        }
-        // Рабочая смена перезаписывает выходной (но не числа — они уже обработаны выше)
-        else if (shift !== 'off' && existing.shift === 'off') {
+          // Обновляем/добавляем только поле hours, не убирая существующую смену
+          shifts[existingIdx] = { ...existing, hours };
+        } else if (shift !== 'off' && existing.shift === 'off') {
+          // Новая информация — рабочая смена, прежняя была off
           shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
         }
-        // Рабочая смена не перезаписывает другую рабочую
       } else {
-        // Числа = выходной (off), не добавляем как рабочую смену
-        shifts.push({ employeeId: emp!.id, date: isoDate, shift: hours ? 'off' : shift, role: roleCell || undefined });
+        const newEntry: any = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
+        if (hours && hours > 0) newEntry.hours = hours;
+        shifts.push(newEntry as any);
       }
     }
   }

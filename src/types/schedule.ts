@@ -177,6 +177,7 @@ export interface ShiftEntry {
   date: string;       // ISO yyyy-mm-dd
   shift: ShiftType;
   role?: string;      // должность на конкретный день (если отличается от основной)
+  hours?: number;     // необязательное поле — количество часов, если в таблице указано число
 }
 
 export interface ScheduleData {

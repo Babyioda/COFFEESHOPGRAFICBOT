@@ -331,25 +331,27 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
 
   const working: {
     emp: Employee; name: string; role: string; color: string;
-    shift: ShiftType; dept: Department; isMe: boolean;
+    shift: ShiftType; dept: Department; isMe: boolean; hours?: number;
   }[] = [];
   const absent: {
     emp: Employee; name: string; role: string; color: string;
-    shift: ShiftType; isMe: boolean;
+    shift: ShiftType; isMe: boolean; hours?: number;
   }[] = [];
 
   data.employees.forEach(emp => {
     const entry = data.shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
     const shift: ShiftType = entry?.shift ?? 'off';
+    const hours = entry?.hours;
     const role = entry?.role || emp.role;
-    if (shift === 'off') return;
+    // Если нет смены и нет отработанных часов — пропускаем
+    if (shift === 'off' && !hours) return;
     const color = getDeptColorByRole(role, emp.color);
     const dept = getDepartment(role) ?? emp.department ?? 'kitchen';
     const isMe = emp.id === linkedEmpId;
     if (shift === 'vacation' || shift === 'sick') {
-      absent.push({ emp, name: emp.name, role, color, shift, isMe });
+      absent.push({ emp, name: emp.name, role, color, shift, isMe, hours });
     } else {
-      working.push({ emp, name: emp.name, role, color, shift, dept, isMe });
+      working.push({ emp, name: emp.name, role, color, shift, dept, isMe, hours });
     }
   });
 
@@ -443,6 +445,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                             const timeStart = custom?.customStart ?? SHIFT_TIMES[w.shift]?.start;
                             const timeEnd   = custom?.customEnd   ?? SHIFT_TIMES[w.shift]?.end;
                             const hasCustomTime = custom?.customStart || custom?.customEnd;
+                            const workedHours = w.hours;
 
                             return (
                               <div key={i} className={`flex items-start gap-3 px-4 py-2.5 ${w.isMe ? isDark ? 'bg-indigo-900/30' : 'bg-indigo-50' : ''}`}>
@@ -459,6 +462,11 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                                     {hasCustomTime && (
                                       <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
                                         {timeStart}–{timeEnd}
+                                      </span>
+                                    )}
+                                    {workedHours && (
+                                      <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                        {workedHours}ч
                                       </span>
                                     )}
                                   </div>
@@ -856,34 +864,44 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             const myEntry   = linkedEmp ? getShiftEntry(linkedEmp.id, day) : null;
             const myShift   = myEntry?.shift ?? 'off';
             const myRole    = myEntry?.role || linkedEmp?.role || '';
-            const isMyShift = myShift !== 'off';
+            const myHours   = myEntry?.hours;
+            const isMyShift = myShift !== 'off' || !!myHours;
             const isToday   = dateStr === todayStr;
             const dow       = new Date(year, month-1, day).getDay();
             const isWeekend = dow === 0 || dow === 6;
             const myTimes   = SHIFT_TIMES[myShift];
 
             const myDeptColor = myRole ? getDeptColorByRole(myRole, '#6366f1') : '#6366f1';
-            const isMyWorking = myShift === 'daily' || myShift === 'day' || myShift === 'night';
+            const isMyWorking = !!myHours || myShift === 'daily' || myShift === 'day' || myShift === 'night';
 
             // Кастомное время для моей смены
             const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
-            const myTimeStart = myCustom?.customStart ?? myTimes?.start;
-            const myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
-            const myShortTime = myTimeStart && myTimeEnd
-              ? `${myTimeStart.slice(0,5).replace(':','')}-${myTimeEnd.slice(0,5).replace(':','')}`.replace('0800-0800','08-08').replace('0800-2000','08-20').replace('2000-0800','20-08')
-              : myTimes?.short;
+            let myTimeStart = myCustom?.customStart ?? myTimes?.start;
+            let myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
+            let myShortTime: string | undefined = undefined;
+            if (myHours) {
+              myShortTime = `${myHours}ч`;
+              myTimeStart = `${myHours} ч`;
+              myTimeEnd = undefined;
+            } else {
+              myShortTime = myTimeStart && myTimeEnd
+                ? `${myTimeStart.slice(0,5).replace(':','')}-${myTimeEnd.slice(0,5).replace(':','')}`.replace('0800-0800','08-08').replace('0800-2000','08-20').replace('2000-0800','20-08')
+                : myTimes?.short;
+            }
 
             const colleagueShifts = colleagueIds.map(cId => {
               const cEmp   = data.employees.find(e => e.id === cId);
               if (!cEmp) return null;
-              const cShift = getShift(cId, day);
+              const cEntry = data.shifts.find(s => s.employeeId === cId && s.date === dateStr);
+              const cShift = cEntry?.shift ?? 'off';
+              const cHours = cEntry?.hours;
               const color  = getColleagueColorForDay(cEmp, data, dateStr);
-              return { shift: cShift, emp: cEmp, color };
-            }).filter((c): c is NonNullable<typeof c> => c !== null && c.shift !== 'off');
+              return { shift: cShift, emp: cEmp, color, hours: cHours };
+            }).filter((c): c is NonNullable<typeof c> => c !== null && (c.shift !== 'off' || !!c.hours));
 
             const hasColleague = colleagueShifts.length > 0;
             const hasAnyShift  = allShifts.length > 0;
-            const hasOverlap   = isMyShift && hasColleague && myTimes;
+            const hasOverlap   = isMyShift && hasColleague && (myTimes || myHours);
 
             return (
               <button
@@ -947,14 +965,15 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                       <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                         {colleagueShifts.map((c, i) => {
                           const cTimes = SHIFT_TIMES[c.shift];
-                          if (!cTimes) return null;
+                          const text = c.hours ? `${c.hours}ч` : cTimes?.short;
+                          if (!text) return null;
                           return (
                             <div
                               key={i}
                               className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] truncate"
                               style={{ backgroundColor: c.color + '30', color: c.color, border: `1px solid ${c.color}60` }}
                             >
-                              {cTimes.short}
+                              {text}
                             </div>
                           );
                         })}
@@ -969,14 +988,15 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                   <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                     {colleagueShifts.map((c, i) => {
                       const cTimes = SHIFT_TIMES[c.shift];
-                      if (!cTimes) return null;
+                      const text = c.hours ? `${c.hours}ч` : cTimes?.short;
+                      if (!text) return null;
                       return (
                         <div
                           key={i}
                           className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] truncate"
                           style={{ backgroundColor: c.color + '30', color: c.color, border: `1px solid ${c.color}60` }}
                         >
-                          {cTimes.short}
+                          {text}
                         </div>
                       );
                     })}
