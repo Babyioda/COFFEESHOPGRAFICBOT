@@ -14,7 +14,8 @@ import {
   updateDoc,
   deleteDoc,
   QueryDocumentSnapshot,
-  DocumentData
+  DocumentData,
+  enableIndexedDbPersistence,
 } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
@@ -32,7 +33,7 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 // Enable offline persistence for better offline support
-db.enablePersistence().catch((err: any) => {
+enableIndexedDbPersistence(db).catch((err: any) => {
   if (err.code === 'failed-precondition') {
     console.warn('[Firebase] Multiple windows open, offline persistence disabled');
   } else if (err.code === 'unimplemented') {

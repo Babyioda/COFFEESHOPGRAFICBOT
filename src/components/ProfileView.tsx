@@ -504,9 +504,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
             title="Редактировать примечание"
           >✏️</button>
           <button
-            onClick={async () => {
+            onClick={() => {
               if (window.confirm('Разорвать все сессии Telegram для этого сотрудника?')) {
-                await clearTgLinksForEmp(emp.id);
+                clearTgLinksForEmp(emp.id);
                 window.alert('Готово. Сотрудник будет выведен со всех аккаунтов.');
               }
             }}

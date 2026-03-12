@@ -226,33 +226,35 @@ export function getEmpIdByCode(code: string): string | null {
  * Удалить все привязки Telegram ID для заданного сотрудника.
  * Используется для "выхода" сотрудника из всех сессий.
  */
-export async function clearTgLinksForEmp(empId: string) {
+export function clearTgLinksForEmp(empId: string) {
   const links = loadTgLinks();
-  const tgIdsToDelete: string[] = [];
+  let changed = false;
   
   // Найти все tgId привязанные к этому empId
   for (const tg in links) {
     if (links[tg] === empId) {
       delete links[tg];
-      tgIdsToDelete.push(tg);
+      changed = true;
     }
   }
   
-  if (tgIdsToDelete.length > 0) {
+  if (changed) {
     localStorage.setItem(STORAGE_TG_LINKS, JSON.stringify(links));
-    console.log(`[Telegram] Cleared ${tgIdsToDelete.length} link(s) for employee ${empId}`);
+    console.log(`[Telegram] Cleared links for employee ${empId}`);
     
-    // Попытка синхронизировать с Firebase (если доступно)
-    try {
-      const { deleteUserLink, getCurrentUid } = await import('./firebase');
-      const uid = getCurrentUid();
-      if (uid) {
-        await deleteUserLink(uid);
-        console.log(`[Telegram] Synced user link deletion to Firebase for ${uid}`);
+    // Синхронизировать с Firebase в фоне (не ждём результат)
+    (async () => {
+      try {
+        const { deleteUserLink, getCurrentUid } = await import('./firebase');
+        const uid = getCurrentUid();
+        if (uid) {
+          await deleteUserLink(uid);
+          console.log(`[Telegram] Firebase sync completed for ${uid}`);
+        }
+      } catch (err) {
+        console.warn('[Telegram] Firebase sync not available or failed:', err);
       }
-    } catch (err) {
-      console.warn('[Telegram] Firebase sync not available or failed:', err);
-    }
+    })();
   }
 }
 
