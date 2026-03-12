@@ -6,7 +6,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import {
   getShiftEdit, saveShiftEdit, deleteShiftEdit,
-  getEmpNote, saveEmpNote, loadShiftEdits, loadEmpNotes,
+  getEmpNote, loadShiftEdits, loadEmpNotes,
 } from '../utils/adminEdits';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -217,84 +217,6 @@ const EditShiftModal: React.FC<EditShiftModalProps> = ({ emp, date, shift, onClo
   );
 };
 
-// ── Edit Emp Note Modal ──────────────────────────────────────────────
-interface EditEmpNoteModalProps {
-  emp: Employee;
-  onClose: () => void;
-  onSaved: () => void;
-}
-const EditEmpNoteModal: React.FC<EditEmpNoteModalProps> = ({ emp, onClose, onSaved }) => {
-  const { isDark } = useTheme();
-  const [note, setNote] = useState(getEmpNote(emp.id));
-
-  const handleSave = () => {
-    saveEmpNote(emp.id, note.trim());
-    onSaved();
-    onClose();
-  };
-
-  const card = isDark ? 'bg-slate-900' : 'bg-white';
-  const inp  = isDark
-    ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500'
-    : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400';
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className={`relative w-full max-w-md rounded-t-3xl shadow-2xl ${card}`}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex justify-center pt-3 pb-2">
-          <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
-        </div>
-        <div className={`px-5 pb-4 border-b ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
-                ✏️ Примечание к сотруднику
-              </p>
-              <h2 className={`text-lg font-extrabold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{emp.name}</h2>
-              <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{emp.role}</p>
-            </div>
-            <button onClick={onClose} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>×</button>
-          </div>
-        </div>
-        <div className="px-5 py-4">
-          <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-            💬 Постоянное примечание
-          </p>
-          <textarea
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            placeholder="Будет отображаться рядом с сотрудником на всех сменах..."
-            rows={4}
-            className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${inp}`}
-          />
-          <p className={`text-[10px] mt-1.5 ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-            Оставь пустым чтобы удалить примечание
-          </p>
-        </div>
-        <div className={`px-5 pb-6 flex gap-2 border-t pt-4 ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
-          <button
-            onClick={onClose}
-            className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-all active:scale-95 ${
-              isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'
-            }`}
-          >
-            Отмена
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-grow flex-2 py-3 rounded-2xl text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition-all active:scale-95"
-          >
-            Сохранить
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ── Day Modal ─────────────────────────────────────────────────────────
 interface DayModalProps {
@@ -500,7 +422,55 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                       </div>
                     );
                   })}
-                </div>
+                  {/* Дополнительная секция для записей, где есть только часы (shift==='off') */}
+                  {group.filter(w => w.shift === 'off' && w.hours).length > 0 && (
+                    <div key="hours">
+                      <div className={`px-4 py-1.5 flex items-center gap-2 bg-amber-100`}> 
+                        <span className="text-sm">⏱️</span>
+                        <span className="text-xs font-semibold">Часы</span>
+                      </div>
+                      <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-gray-50'}`}>
+                        {group.filter(w => w.shift === 'off' && w.hours).map((w, i) => {
+                          const workedHours = w.hours;
+                          const empNote = getNote(w.emp.id);
+                          const shiftNote = getShiftNote(w.emp.id);
+                          return (
+                            <div key={i} className={`flex items-start gap-3 px-4 py-2.5 ${w.isMe ? isDark ? 'bg-indigo-900/30' : 'bg-indigo-50' : ''}`}>
+                              <div
+                                className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm mt-0.5"
+                                style={{ backgroundColor: w.color }}
+                              >
+                                {w.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
+                                  {w.isMe && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-100 px-1.5 py-0.5 rounded-full flex-shrink-0">Я</span>}
+                                  {workedHours && (
+                                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                      {workedHours}ч
+                                    </span>
+                                  )}
+                                </div>
+                                <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>{w.role}</p>
+                                {empNote && (
+                                  <p className={`text-xs mt-0.5 rounded-lg px-2 py-0.5 font-medium ${isDark ? 'bg-amber-900/30 text-amber-300' : 'bg-amber-50 text-amber-700'}`}>
+                                    💬 {empNote}
+                                  </p>
+                                )}
+                                {shiftNote && (
+                                  <p className={`text-xs mt-0.5 rounded-lg px-2 py-0.5 font-medium ${isDark ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
+                                    📌 {shiftNote}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+</div>
               );
             })}
 
@@ -563,8 +533,6 @@ interface ColleagueSelectorProps {
 const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId, selectedIds, friendIds, isAdmin, onToggle, onClose }) => {
   const { isDark } = useTheme();
   const [search, setSearch] = useState('');
-  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
-  const [noteKey, setNoteKey] = useState(0);
 
   const allEmps = data.employees.filter(emp => {
     if (emp.id === linkedEmpId) return false;
@@ -622,19 +590,6 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
             {isSelected && '✓'}
           </div>
         </button>
-        {/* Карандаш — только для администраторов */}
-        {isAdmin && (
-          <button
-            onClick={() => setEditingEmp(emp)}
-            className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all active:scale-95 flex-shrink-0 ${
-              empNote
-                ? isDark ? 'bg-amber-900/40 text-amber-400' : 'bg-amber-100 text-amber-600'
-                : isDark ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-            }`}
-          >
-            ✏️
-          </button>
-        )}
       </div>
     );
   };
@@ -669,7 +624,7 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
               }`}
             />
           </div>
-          <div key={noteKey} className="overflow-y-auto flex-1 px-4 py-3 space-y-4">
+          <div className="overflow-y-auto flex-1 px-4 py-3 space-y-4">
             {friends.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
@@ -701,13 +656,6 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
         </div>
       </div>
 
-      {editingEmp && (
-        <EditEmpNoteModal
-          emp={editingEmp}
-          onClose={() => setEditingEmp(null)}
-          onSaved={() => setNoteKey(k => k + 1)}
-        />
-      )}
     </>
   );
 };
@@ -878,15 +826,24 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
             let myTimeStart = myCustom?.customStart ?? myTimes?.start;
             let myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
+            const isCustomTime = !!myCustom;
             let myShortTime: string | undefined = undefined;
             if (myHours) {
               myShortTime = `${myHours}ч`;
               myTimeStart = `${myHours} ч`;
               myTimeEnd = undefined;
+            } else if (myTimeStart && myTimeEnd) {
+              // show compact label; when a custom time is set, keep the colon for clarity
+              if (isCustomTime) {
+                myShortTime = `${myTimeStart.slice(0,5)}-${myTimeEnd.slice(0,5)}`;
+              } else {
+                myShortTime = `${myTimeStart.slice(0,5).replace(':','')}-${myTimeEnd.slice(0,5).replace(':','')}`
+                  .replace('0800-0800','08-08')
+                  .replace('0800-2000','08-20')
+                  .replace('2000-0800','20-08');
+              }
             } else {
-              myShortTime = myTimeStart && myTimeEnd
-                ? `${myTimeStart.slice(0,5).replace(':','')}-${myTimeEnd.slice(0,5).replace(':','')}`.replace('0800-0800','08-08').replace('0800-2000','08-20').replace('2000-0800','20-08')
-                : myTimes?.short;
+              myShortTime = myTimes?.short;
             }
 
             const colleagueShifts = colleagueIds.map(cId => {
@@ -953,12 +910,14 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                         >
                           {myTimeStart}
                         </div>
-                        <div
-                          className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
-                          style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
-                        >
-                          {myTimeEnd}
-                        </div>
+                        {myTimeEnd && (
+                          <div
+                            className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                            style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
+                          >
+                            {myTimeEnd}
+                          </div>
+                        )}
                       </div>
                     )}
                     {colleagueShifts.length > 0 && (

@@ -7,8 +7,9 @@ import { EmployeeCard } from './EmployeeCard';
 import { ReportsSection } from './ReportsSection';
 import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
-  saveTgLink, getEmpIdByTgId, syncTgLink,
+  saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
+import { saveEmpNote, getEmpNote } from '../utils/adminEdits';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
@@ -250,6 +251,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
   const { isDark } = useTheme();
   const [activeDept, setActiveDept] = useState<Department | 'all'>('all');
 
+  // state for editing notes via admin panel
+  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
+  const [noteText, setNoteText] = useState('');
+
   const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
@@ -308,6 +313,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
         {filteredEmps.map(emp => {
           const dept = emp.department ?? getDepartment(emp.role);
           const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
+          const empNote = getEmpNote(emp.id);
           return (
             <div key={emp.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${card}`}>
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: emp.color }}>
@@ -318,10 +324,86 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                 <p className={`text-xs truncate ${sub}`}>{emp.roles && emp.roles.length > 1 ? emp.roles.join(' / ') : emp.role}</p>
                 {deptCfg && <span className="text-[10px] font-semibold" style={{ color: deptCfg.color }}>{deptCfg.icon} {deptCfg.label}</span>}
               </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditingEmp(emp);
+                    setNoteText(getEmpNote(emp.id));
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all active:scale-95 ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                  title="Редактировать примечание"
+                >✏️</button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Разорвать все сессии Telegram для этого сотрудника?')) {
+                      clearTgLinksForEmp(emp.id);
+                      window.alert('Готово. Сотрудник будет выведен со всех аккаунтов.');
+                    }
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-base transition-all active:scale-95 ${isDark ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
+                  title="Выйти из всех сессий"
+                >🚪</button>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {/* модалка редактирования примечания */}
+      {editingEmp && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setEditingEmp(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className={`relative w-full max-w-md rounded-t-3xl shadow-2xl ${isDark ? 'bg-slate-900' : 'bg-white'}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-center pt-3 pb-2">
+              <div className={`w-10 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
+            </div>
+            <div className={`px-5 pb-4 border-b ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-wide ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>
+                    ✏️ Редактировать примечание
+                  </p>
+                  <h2 className={`text-lg font-extrabold ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{editingEmp.name}</h2>
+                </div>
+                <button onClick={() => setEditingEmp(null)} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>×</button>
+              </div>
+            </div>
+            <div className="px-5 py-4">
+              <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                💬 Примечание к сотруднику
+              </p>
+              <textarea
+                value={noteText}
+                onChange={e => setNoteText(e.target.value)}
+                placeholder="Например: работает 0.5 ставки, особые условия..."
+                rows={4}
+                className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
+              />
+            </div>
+            <div className={`px-5 pb-6 flex gap-2 border-t ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
+              <button
+                onClick={() => setEditingEmp(null)}
+                className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-all active:scale-95 ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'}`}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  if (editingEmp) saveEmpNote(editingEmp.id, noteText);
+                  setEditingEmp(null);
+                }}
+                className="flex-grow flex-2 py-3 rounded-2xl text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition-all active:scale-95"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

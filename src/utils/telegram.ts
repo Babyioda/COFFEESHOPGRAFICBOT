@@ -213,6 +213,24 @@ export function getEmpIdByCode(code: string): string | null {
   return codes[upper] ?? null;
 }
 
+/**
+ * Удалить все привязки Telegram ID для заданного сотрудника.
+ * Используется для "выхода" сотрудника из всех сессий.
+ */
+export function clearTgLinksForEmp(empId: string) {
+  const links = loadTgLinks();
+  let changed = false;
+  for (const tg in links) {
+    if (links[tg] === empId) {
+      delete links[tg];
+      changed = true;
+    }
+  }
+  if (changed) {
+    localStorage.setItem(STORAGE_TG_LINKS, JSON.stringify(links));
+  }
+}
+
 /** Сгенерировать или получить существующий код для сотрудника */
 export function getOrCreateCodeForEmp(empId: string): string {
   const codes = loadInviteCodes();
