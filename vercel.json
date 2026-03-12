@@ -1,4 +1,3 @@
 {
-  "outputDirectory": "dist",
-  "nodeVersion": "20.x"
+  "outputDirectory": "dist"
 }
