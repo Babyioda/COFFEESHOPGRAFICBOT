@@ -1142,7 +1142,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   ];
 
   // ── Экран привязки ──
-  if (!linkedEmp || isLinking) {
+  if (!linkedEmpId || !linkedEmp || isLinking) {
+    if (!isLinking) setIsLinking(true); // Гарантированно показать окно авторизации
     return (
       <div className="space-y-4 pb-6">
         {/* Шапка */}
