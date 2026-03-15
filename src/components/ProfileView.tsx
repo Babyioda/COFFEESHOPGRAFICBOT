@@ -108,10 +108,8 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         'sf_tg_name',
       ];
       keys.forEach(k => localStorage.removeItem(k));
-      // Сбросить привязку сотрудника и показать экран авторизации
-      if (typeof onEmployeeUpdate === 'function') onEmployeeUpdate(null);
-      if (typeof setLinkedEmpId === 'function') setLinkedEmpId(null);
-      if (typeof setIsLinking === 'function') setIsLinking(true);
+      // Сбросить привязку сотрудника через onUnlinkEmployee
+      if (typeof onUnlinkEmployee === 'function') onUnlinkEmployee();
       if (tg && tg.showAlert) {
         tg.showAlert('✅ Данные успешно очищены!\nВы вышли из аккаунта.', () => {});
       } else {
@@ -1252,7 +1250,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     <div className="w-full space-y-4 pb-6">
       {/* Шапка */}
       <div className="rounded-2xl p-4 border shadow-sm flex items-center gap-3 mb-4" style={{ background: 'linear-gradient(90deg,#6366f1,#a5b4fc)' }}>
-        <img src={linkedEmp?.avatarUrl || '/default-avatar.png'} alt="avatar" className="w-12 h-12 rounded-xl object-cover border-2 border-white" />
+        <img src={linkedEmp && linkedEmp.photoUrl ? linkedEmp.photoUrl : '/default-avatar.png'} alt="avatar" className="w-12 h-12 rounded-xl object-cover border-2 border-white" />
         <div className="flex-1 min-w-0">
           <h2 className="text-white text-xl font-bold truncate">Мой профиль</h2>
         </div>
@@ -1260,7 +1258,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           <button
             className="w-8 h-8 rounded-full flex items-center justify-center bg-white/20 text-white hover:bg-white/30 transition-all active:scale-95"
             title="Выйти из аккаунта"
-            onClick={handleClearLocalStorage}
+            onClick={() => {
+              handleClearLocalStorage();
+              if (typeof onUnlinkEmployee === 'function') onUnlinkEmployee();
+            }}
           >
             <span className="material-icons">edit</span>
           </button>
