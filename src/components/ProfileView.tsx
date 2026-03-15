@@ -229,6 +229,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
 
   return (
+
     <div className="space-y-4 pb-6">
       {/* Тема */}
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
@@ -243,16 +244,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-95 ${isDark ? 'bg-slate-600 text-slate-100 shadow-sm' : 'text-gray-400'}`}
           >🌙 Тёмная</button>
         </div>
-      </div>
-
-      {/* Очистка localStorage */}
-      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
-        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🧹 Очистить данные</h3>
-        <p className={`text-xs mb-3 ${sub}`}>Полностью удалить все локальные данные и привязки на этом устройстве.</p>
-        <button
-          onClick={handleClearLocalStorage}
-          className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-red-600"
-        >Очистить данные</button>
       </div>
 
       {/* Google Sheets — только администраторы */}
@@ -539,14 +530,42 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             </button>
             <button
               onClick={async () => {
+                // Новый тест: запись, чтение, удаление
+                const { db, collection, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp } = await import('../utils/firebase');
+                const testCol = 'test_debug';
+                const testId = 'debug-test-doc';
                 try {
-                  await testConnection();
-                  alert('Проверка отправлена в консоль');
-                } catch {}
+                  // 1. Запись
+                  await setDoc(doc(db, testCol, testId), {
+                    message: 'debug test',
+                    createdAt: serverTimestamp(),
+                    rnd: Math.random()
+                  });
+                  // 2. Чтение
+                  const snap = await getDoc(doc(db, testCol, testId));
+                  if (!snap.exists()) throw new Error('Doc not found after write');
+                  // 3. Удаление
+                  await deleteDoc(doc(db, testCol, testId));
+                  alert('✅ Firebase: запись, чтение, удаление — успешно! Смотрите консоль.');
+                } catch (err: any) {
+                  let msg = err?.message || String(err);
+                  // Если есть ссылка на индекс — показать её
+                  if (err?.code === 'failed-precondition' && err?.message?.includes('index')) {
+                    msg += '\n\nВам нужно создать индекс в Firebase Console!';
+                  }
+                  alert('❌ Firebase test error: ' + msg);
+                  console.error('[Firebase Debug Test]', err);
+                }
               }}
               className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
             >
               🔌 Тест Firebase
+            </button>
+            <button
+              onClick={handleClearLocalStorage}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-red-500 hover:bg-red-600 text-white"
+            >
+              🧹 Очистить данные
             </button>
           </div>
           <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
