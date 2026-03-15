@@ -301,7 +301,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
     return shiftEdits.find(e => e.empId === empId && e.date === dateStr);
   };
   const getNote = (empId: string) => {
-    return fsEmpNotes[empId] ?? empNotes.find(e => e.empId === empId)?.note ?? '';
+    return fsEmpNotes[empId] ?? '';
   };
   const getShiftNote = (empId: string) => {
     return fsShiftNotes[empId] ?? shiftEdits.find(e => e.empId === empId && e.date === dateStr)?.note ?? '';
@@ -708,6 +708,7 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
               </div>
             </button>
           </div>
+    );
   };
 
   return (

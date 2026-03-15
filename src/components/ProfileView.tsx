@@ -88,44 +88,67 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   useEffect(() => {
     if (!linkedEmp) return;
     setPrefsLoaded(false);
-    // Подписка на все prefs
-    const unsubPrefs = watchEmpPrefs((allPrefs) => {
-      const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
-      setShowTelegramPref(!!p.showTelegram);
-      if (p.birthday) {
-        setBirthdayInput(`2000-${p.birthday}`);
-      } else {
-        setBirthdayInput('');
-      }
-      if (p.customUsername) {
-        setManualUsername(p.customUsername);
-      } else {
-        setManualUsername('');
-      }
+    const unsubscribers: (() => void)[] = [];
+    
+    try {
+      // Подписка на все prefs
+      const unsubPrefs = watchEmpPrefs((allPrefs) => {
+        try {
+          const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
+          setShowTelegramPref(!!p.showTelegram);
+          if (p.birthday) {
+            setBirthdayInput(`2000-${p.birthday}`);
+          } else {
+            setBirthdayInput('');
+          }
+          if (p.customUsername) {
+            setManualUsername(p.customUsername);
+          } else {
+            setManualUsername('');
+          }
+          setPrefsLoaded(true);
+        } catch (err) {
+          console.error('[ProfileView] Error processing prefs:', err);
+          setPrefsLoaded(true);
+        }
+      });
+      unsubscribers.push(unsubPrefs);
+
+      // Подписка на employee rules (часы работы)
+      const unsubRules = watchEmpRules((allRules) => {
+        try {
+          const rule = allRules.find(r => r.empId === linkedEmp.id);
+          if (rule && rule.hours) {
+            // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
+            // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
+          }
+        } catch (err) {
+          console.error('[ProfileView] Error processing rules:', err);
+        }
+      });
+      unsubscribers.push(unsubRules);
+
+      // Подписка на employee notes (заметки)
+      const unsubNotes = watchEmpNotes((allNotes) => {
+        try {
+          const note = allNotes.find(n => n.empId === linkedEmp.id);
+          if (note) {
+            // Можно добавить setNoteText(note.note) если нужно live-отображение
+          }
+        } catch (err) {
+          console.error('[ProfileView] Error processing notes:', err);
+        }
+      });
+      unsubscribers.push(unsubNotes);
+    } catch (err) {
+      console.error('[ProfileView] Failed to set up Firebase listeners:', err);
       setPrefsLoaded(true);
-    });
-
-    // Подписка на employee rules (часы работы)
-    const unsubRules = watchEmpRules((allRules) => {
-      const rule = allRules.find(r => r.empId === linkedEmp.id);
-      if (rule && rule.hours) {
-        // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
-        // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
-      }
-    });
-
-    // Подписка на employee notes (заметки)
-    const unsubNotes = watchEmpNotes((allNotes) => {
-      const note = allNotes.find(n => n.empId === linkedEmp.id);
-      if (note) {
-        // Можно добавить setNoteText(note.note) если нужно live-отображение
-      }
-    });
+    }
 
     return () => {
-      unsubPrefs && unsubPrefs();
-      unsubRules && unsubRules();
-      unsubNotes && unsubNotes();
+      unsubscribers.forEach(unsub => {
+        try { unsub?.(); } catch (err) { console.error('[ProfileView] Error unsubscribing:', err); }
+      });
     };
   }, [linkedEmp]);
 

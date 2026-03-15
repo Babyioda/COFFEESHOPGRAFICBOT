@@ -1,5 +1,11 @@
 # Применение Firestore Security Rules
 
+## 🚨 ВНИМАНИЕ: Текущие правила НЕРАБОТАЮЩИЕ!
+
+Если вы видете **чёрный экран** при использовании приложения, это вызвано излишне строгими Security Rules.
+
+## ✅ ИСПРАВЛЕННЫЕ ПРАВИЛА (ИСПОЛЬЗУЙТЕ ЭТИ!)
+
 ## Шаг 1: Откройте Firebase Console
 
 1. Перейдите на [console.firebase.google.com](https://console.firebase.google.com)
@@ -12,34 +18,50 @@
 
 ## Шаг 3: Замените код правил
 
-Удалите всё содержимое и скопируйте следующие правила:
+Удалите всё содержимое и скопируйте **эти правила**:
 
 ```
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Заметки по сменам — все могут читать, аутентифицированные могут писать
+    // Разрешаем всем аутентифицированным пользователям читать и писать
+    // Это безопасно в dev-режиме, так как у нас только anonymous auth
+    
     match /shift_notes/{noteId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
 
-    // Заметки о сотрудниках — аутентифицированные могут читать и писать
     match /employee_notes/{noteId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
 
-    // Смены (если будут добавлены)
     match /shifts/{shiftId} {
-      allow read: if true;
-      allow create, update, delete: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
 
-    // Временный доступ для разработки (удалить перед продакшеном)
-    // match /{document=**} {
-    //   allow read, write: if true;
-    // }
+    match /employee_rules/{ruleId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /shift_edits/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /emp_notes/{empId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /emp_rules/{empId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /emp_prefs/{empId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /user_links/{uid} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
 ```
@@ -50,53 +72,107 @@ service cloud.firestore {
 
 ---
 
-## Что означают правила:
+## ⚠️ ОБЯЗАТЕЛЬНЫЕ ПРЕДУСЛОВИЯ
 
-### `shift_notes` (Заметки по сменам)
-- **read**: `if true` — **любой может читать** (даже без авторизации)
-- **create/update/delete**: `if request.auth != null` — только **аутентифицированные пользователи** могут писать
+Перед применением правил убедитесь, что:
 
-### `employee_notes` (Заметки о сотрудниках)
-- **read**: `if request.auth != null` — только **аутентифицированные пользователи** могут читать
-- **create/update/delete**: `if request.auth != null` — только **аутентифицированные пользователи** могут писать
+### 1. Anonymous Authentication ВКЛЮЧЕНА
 
-### `shifts` (Смены)
-- **read**: `if true` — **любой может читать**
-- **create/update/delete**: `if request.auth != null` — только **аутентифицированные пользователи** могут писать
+1. Перейдите в **Authentication** (левое меню)
+2. Откройте вкладку **Sign-in method**
+3. Найдите "Anonymous" и убедитесь что он **ENABLED** (синяя галка)
+4. Если отключен - нажимите на него и **Enable**
+
+**Без этого приложение не сможет подключиться к Firebase!**
+
+### 2. Проверьте переменные окружения в `.env`
+
+```
+VITE_FIREBASE_API_KEY=AIzaSyDDdXRwvYxps4zPEEyOH3RVHfLlzKC2jwk
+VITE_FIREBASE_AUTH_DOMAIN=csc-bd-30c56.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=csc-bd-30c56
+VITE_FIREBASE_STORAGE_BUCKET=csc-bd-30c56.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=853953200317
+VITE_FIREBASE_APP_ID=1:853953200317:web:4834ccddbd0a8cfe5ff7d4
+VITE_FIREBASE_MEASUREMENT_ID=G-DTYD2TEK4F
+```
 
 ---
 
-## Иерархия правил
+## 🔍 Что означают правила
 
-Важно помнить, что правила работают на уровне документов:
-- Если вы используете подколлекции, создайте для них отдельные правила
-- Правила не наследуются автоматически для подколлекций
+### Структура правил
+- **`request.auth != null`** — только аутентифицированные пользователи (в том числе anonymous)
+- **Каждая коллекция** имеет свои `allow` правила
+- **Иерархия не наследуется** — нужно писать правила для каждой коллекции
 
-Пример для подколлекции:
+### Коллекции и их назначение
+
+| Коллекция | Назначение | Кто может | 
+|-----------|-----------|----------|
+| `shift_notes` | Заметки по сменам | Аутентифицированные пользователи |
+| `employee_notes` | Заметки о сотрудниках | Аутентифицированные пользователи |
+| `shifts` | Информация о сменах | Аутентифицированные пользователи |
+| `employee_rules` | Правила работы сотрудников | Аутентифицированные пользователи |
+| `shift_edits` | Правки смен в localStorage | Аутентифицированные пользователи |
+| `emp_notes` | Основные заметки | Аутентифицированные пользователи |
+| `emp_rules` | Основные правила | Аутентифицированные пользователи |
+| `emp_prefs` | Предпочтения (день рождения, Telegram) | Аутентифицированные пользователи |
+| `user_links` | Связь UID ↔ сотрудника | Аутентифицированные пользователи |
+
+---
+
+## 🧪 Проверка Security Rules
+
+После публикации правил проверьте что всё работает:
+
+1. Откройте **Rules Playground** (кнопка в левом меню)
+2. Выберите коллекцию `emp_prefs`, операцию `read`
+3. Нажмите **Run** 
+4. Должно быть: **Outcome: Allow** ✅
+
+Если **Outcome: Deny** ❌ — проверьте что Anonymous Auth включена!
+
+---
+
+## ⚡ БЫСТРОЕ ИСПРАВЛЕНИЕ (если черный экран)
+
+Если срочно нужно чтобы работало, скопируйте в Rules:
+
 ```
-match /shifts/{shiftId} {
-  allow read, write: if request.auth != null;
-  
-  // Правила для подколлекции notes
-  match /notes/{noteId} {
-    allow read, write: if request.auth != null;
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write;
+    }
   }
 }
 ```
 
----
-
-## Проверка Security Rules
-
-После публикации правил:
-
-1. Откройте **Rules Playground** (кнопка в левом меню)
-2. Выберите коллекцию и операцию
-3. Нажмите **Run** для проверки
+⚠️ **Это открывает БД для ВСЕХ! Используйте только для тестирования!**
 
 ---
 
-## Поиск и исправление ошибок
+## 🚀 ПОСЛЕ ИСПРАВЛЕНИЯ
+
+1. Обновите страницу приложения (Ctrl+R)
+2. Откройте консоль браузера (F12)
+3. Должны появиться сообщения:
+   ```
+   [Firebase] Anonymous auth established: xxxxx
+   [Firebase] Watch emp_prefs updated: 0 items
+   ```
+4. **Черный экран должен исчезнуть!**
+
+---
+
+## 📖 Дополнительная информация
+
+- [Firebase Security Rules Documentation](https://firebase.google.com/docs/firestore/security/start)
+- [Rules Playground Guide](https://firebase.google.com/docs/firestore/security/rules-conditions)
+- [см. FIREBASE_DIAGNOSTIC.md для диагностики](../FIREBASE_DIAGNOSTIC.md)
+
 
 Ошибки правил будут видны в консоли браузера при открытии DevTools (F12):
 

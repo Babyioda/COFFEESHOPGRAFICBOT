@@ -133,6 +133,7 @@ function AppInner() {
 
     setLiveLoading(true);
     setLiveError(null);
+    console.log('[App] Fetching sheet for month:', { id, month, year, gid });
 
     try {
       // Используем Apps Script если задан — он возвращает нужный лист по имени
@@ -140,10 +141,12 @@ function AppInner() {
       let parsed;
 
       if (scriptUrl) {
+        console.log('[App] Using Apps Script:', scriptUrl);
         // Строим название листа для поиска
         const MONTH_NAMES_RU = ['','январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
         const sheetName = `${MONTH_NAMES_RU[month].toUpperCase()} ${year}`;
         const url = `${scriptUrl}?sheet=${encodeURIComponent(sheetName)}`;
+        console.log('[App] Fetching from Apps Script:', url);
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const text = await res.text();
@@ -153,6 +156,7 @@ function AppInner() {
         if (!json.values || !json.values.length) throw new Error('Нет данных от Apps Script');
         // Передаём массив напрямую — parseGoogleSheetsCSV принимает string[][]
         parsed = parseGoogleSheetsCSV(json.values as string[][]);
+        console.log('[App] Apps Script returned:', json.values.length, 'rows');
         // Обновляем карту листов из ответа
         if (json.sheets) {
           setSheetMap(prev => {
@@ -166,11 +170,13 @@ function AppInner() {
       } else {
         // Fallback — CSV
         const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
+        console.log('[App] Using CSV fallback:', csvUrl);
         const res = await fetch(csvUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}: Не удалось загрузить таблицу`);
         const text = await res.text();
         if (text.trim().startsWith('<!')) throw new Error('Таблица недоступна. Проверьте доступ (Все с ссылкой)');
         parsed = parseGoogleSheetsCSV(text);
+        console.log('[App] CSV fallback returned:', text.split('\n').length, 'rows');
       }
 
       // merge any stored prefs
@@ -186,6 +192,7 @@ function AppInner() {
       dataCache.set(cacheKey, parsed);
       setLiveData(parsed);
       setLastSync(new Date().toISOString());
+      console.log('[App] Sheet loaded successfully:', { employees: parsed.employees.length, shifts: parsed.shifts.length });
 
       // Обновляем gid в sheetMap если парсер определил месяц
       if (parsed.month && parsed.year) {
@@ -196,9 +203,12 @@ function AppInner() {
         });
       }
     } catch (e: unknown) {
-      setLiveError(e instanceof Error ? e.message : 'Ошибка загрузки');
+      const errorMsg = e instanceof Error ? e.message : 'Ошибка загрузки';
+      console.error('[App] Error fetching sheet:', errorMsg);
+      setLiveError(errorMsg);
       // Если кэш есть — используем его
       if (dataCache.has(cacheKey)) {
+        console.log('[App] Using cached data for:', cacheKey);
         setLiveData(dataCache.get(cacheKey)!);
       }
     } finally {
@@ -305,7 +315,7 @@ function AppInner() {
                   CoffeeShop Company
                 </h1>
                 <p className={`text-[10px] leading-tight ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                  {liveLoading ? 'Синхронизация...' : liveData ? `✓ График загружен` : 'Загрузка...'}
+                  {liveError ? `❌ ${liveError}` : liveLoading ? '⏳ Синхронизация...' : liveData ? `✓ Загружено (${liveData.employees.length} чел.)` : '📊 Демо данные'}
                 </p>
               </div>
             </div>
@@ -319,11 +329,12 @@ function AppInner() {
                   <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">тест</span>
                 </div>
               )}
-              {liveLoading  && <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />}
-              {!liveLoading && liveData  && <div className="w-2 h-2 bg-emerald-400 rounded-full" />}
-              {!liveLoading && !liveData && <div className={`w-2 h-2 rounded-full ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`} />}
-              <span className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-gray-400'}`}>
-                {liveLoading ? 'Синхр...' : liveData ? 'Синхр.' : 'Демо'}
+              {liveError && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+              {!liveError && liveLoading  && <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />}
+              {!liveError && !liveLoading && liveData  && <div className="w-2 h-2 bg-emerald-400 rounded-full" />}
+              {!liveError && !liveLoading && !liveData && <div className={`w-2 h-2 rounded-full ${isDark ? 'bg-slate-600' : 'bg-gray-300'}`} />}
+              <span className={`text-[10px] ${liveError ? 'text-red-500' : isDark ? 'text-slate-500' : 'text-gray-400'}`}>
+                {liveError ? '❌ Ошибка' : liveLoading ? '⏳ Синхр' : liveData ? '✓ Синхр' : '📊 Демо'}
               </span>
             </div>
           </div>
@@ -332,6 +343,19 @@ function AppInner() {
 
       {/* ── Main ── */}
       <main className="flex-1 overflow-y-auto px-3 py-3 pb-24">
+        {liveError && (
+          <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+            <p className="font-semibold mb-1">⚠️ {liveError}</p>
+            <p className="text-[11px] text-red-600">
+              Показываются демо данные. Проверьте:
+              <ul className="mt-1 ml-3 list-disc space-y-0.5">
+                <li>ID таблицы в настройках</li>
+                <li>Доступность Google Sheets</li>
+                <li>Apps Script URL (если указан)</li>
+              </ul>
+            </p>
+          </div>
+        )}
         {effectiveTab === 'shifts' && (
           <ShiftsView
             data={scheduleData}

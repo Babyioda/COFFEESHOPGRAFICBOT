@@ -603,9 +603,15 @@ export function watchEmpNotes(cb: (items: EmpNoteDoc[]) => void) {
   try {
     return onSnapshot(collection(db, 'emp_notes'), (snap: any) => {
       const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpNoteDoc));
+      console.log('[Firebase] Watch emp_notes updated:', notes.length, 'items');
       cb(notes);
     }, (err: any) => {
-      console.error('[Firebase] Watch error for emp_notes:', err);
+      console.error('[Firebase] Watch error for emp_notes:', err.code, err.message);
+      if (err.code === 'permission-denied') {
+        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_prefs collection needs read access.');
+      }
+      // Still call callback with empty array to avoid breaking UI
+      cb([]);
     });
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for emp_notes:', err);
@@ -618,9 +624,15 @@ export function watchEmpRules(cb: (items: EmpRuleDoc[]) => void) {
   try {
     return onSnapshot(collection(db, 'emp_rules'), (snap: any) => {
       const rules = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpRuleDoc));
+      console.log('[Firebase] Watch emp_rules updated:', rules.length, 'items');
       cb(rules);
     }, (err: any) => {
-      console.error('[Firebase] Watch error for emp_rules:', err);
+      console.error('[Firebase] Watch error for emp_rules:', err.code, err.message);
+      if (err.code === 'permission-denied') {
+        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_rules collection needs read access.');
+      }
+      // Still call callback with empty array to avoid breaking UI
+      cb([]);
     });
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for emp_rules:', err);
@@ -633,9 +645,15 @@ export function watchEmpPrefs(cb: (items: EmpPrefsDoc[]) => void) {
   try {
     return onSnapshot(collection(db, 'emp_prefs'), (snap: any) => {
       const prefs = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
+      console.log('[Firebase] Watch emp_prefs updated:', prefs.length, 'items');
       cb(prefs);
     }, (err: any) => {
-      console.error('[Firebase] Watch error for emp_prefs:', err);
+      console.error('[Firebase] Watch error for emp_prefs:', err.code, err.message);
+      if (err.code === 'permission-denied') {
+        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_prefs collection needs read access.');
+      }
+      // Still call callback with empty array to avoid breaking UI
+      cb([]);
     });
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for emp_prefs:', err);
