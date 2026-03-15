@@ -223,20 +223,22 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
 
+  // Блок отладки
+  const renderDebugBlock = () => (
+    <div style={{ marginTop: 24, padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>🛠️ Отладка</div>
+      <button
+        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', marginBottom: 8 }}
+        onClick={handleClearLocalStorage}
+      >
+        Очистить все локальные данные
+      </button>
+    </div>
+  );
+
   return (
-        // Блок отладки
-        const renderDebugBlock = () => (
-          <div style={{ marginTop: 24, padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>🛠️ Отладка</div>
-            <button
-              style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', marginBottom: 8 }}
-              onClick={handleClearLocalStorage}
-            >
-              Очистить все локальные данные
-            </button>
-          </div>
-        );
     <div className="space-y-4 pb-6">
+      {renderDebugBlock()}
       {/* Тема */}
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
         <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🎨 Тема оформления</h3>
