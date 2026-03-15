@@ -1026,41 +1026,6 @@ interface ProfileViewProps {
 }
 
 
-export const ProfileView: React.FC<ProfileViewProps> = ({
-  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '',
-  onSave, lastSync, isLoading, onRefresh, error,
-  onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
-  onEmployeeUpdate,
-}) => {
-  const { isDark } = useTheme();
-  const today = fakeDate ?? new Date();
-
-  const [activeSection, setActiveSection] = useState<ProfileSection>('staff');
-  const [linkedEmpId, setLinkedEmpId]     = useState<string | null>(() => getLinkedEmpId());
-  const [tgName, setTgName]               = useState<string | null>(() => localStorage.getItem(STORAGE_TG_NAME));
-  const [isLinking, setIsLinking]         = useState(false);
-  const [searchQuery, setSearchQuery]     = useState('');
-  const [searchResults, setSearchResults] = useState<Employee[]>([]);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
-
-  const tgUser = getTgUser();
-  const tgId   = getTgUserId();
-  const isAdmin = tgId !== null && ADMIN_TG_IDS.includes(tgId);
-
-  useEffect(() => { initTelegramApp(); }, []);
-
-  // Автологин через Telegram ID
-  useEffect(() => {
-    if (tgId && !linkedEmpId && data.employees.length > 0) {
-      const empId = getEmpIdByTgId(tgId);
-      if (empId && data.employees.find(e => e.id === empId)) {
-        setLinkedEmpId(empId);
-        onLinkedEmpChange(empId);
-        saveLinkedEmpId(empId);
-      }
-    }
-  }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
-
   const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
   const deptCfg   = dept ? DEPARTMENT_CONFIG[dept] : null;
