@@ -509,6 +509,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
 
     </div>
   );
+}
 
 // ── Admin Panel ───────────────────────────────────────────────────
 interface AdminPanelProps {
@@ -838,7 +839,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
 
     </div>
   );
-};
+}
 
 // ── Staff Section ─────────────────────────────────────────────────
 interface StaffSectionProps {
@@ -1025,6 +1026,40 @@ interface ProfileViewProps {
   onEmployeeUpdate?: (emp: Employee) => void;
 }
 
+export const ProfileView: React.FC<ProfileViewProps> = ({
+  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '',
+  onSave, lastSync, isLoading, onRefresh, error,
+  onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
+  onEmployeeUpdate,
+}) => {
+  const { isDark } = useTheme();
+  const today = fakeDate ?? new Date();
+
+  const [activeSection, setActiveSection] = useState<ProfileSection>('staff');
+  const [linkedEmpId, setLinkedEmpId]     = useState<string | null>(() => getLinkedEmpId());
+  const [tgName, setTgName]               = useState<string | null>(() => localStorage.getItem(STORAGE_TG_NAME));
+  const [isLinking, setIsLinking]         = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [searchResults, setSearchResults] = useState<Employee[]>([]);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  const tgUser = getTgUser();
+  const tgId   = getTgUserId();
+  const isAdmin = tgId !== null && ADMIN_TG_IDS.includes(tgId);
+
+  useEffect(() => { initTelegramApp(); }, []);
+
+  // Автологин через Telegram ID
+  useEffect(() => {
+    if (tgId && !linkedEmpId && data.employees.length > 0) {
+      const empId = getEmpIdByTgId(tgId);
+      if (empId && data.employees.find(e => e.id === empId)) {
+        setLinkedEmpId(empId);
+        onLinkedEmpChange(empId);
+        saveLinkedEmpId(empId);
+      }
+    }
+  }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
 
   const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
@@ -1039,7 +1074,6 @@ interface ProfileViewProps {
     const displayName = tgUser ? getTgFullName(tgUser) : name;
     setTgName(displayName);
     localStorage.setItem(STORAGE_TG_NAME, displayName);
-    
     // Автоматически сохранить Telegram username если он есть в Telegram профиле
     if (tgUser?.username) {
       console.log('[ProfileView] Auto-saving Telegram username:', tgUser.username);
@@ -1048,21 +1082,14 @@ interface ProfileViewProps {
         customUsername: tgUser.username, // Save from Telegram profile
       });
     }
-    
     setIsLinking(false);
     setSearchQuery('');
     setSearchResults([]);
   };
 
-
-
   const headerGradient = dept
     ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[dept]
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
-
-  const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
-  const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
-  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
 
   const SECTIONS: { id: ProfileSection; label: string; icon: string }[] = [
     { id: 'reports',   label: 'Отчёты',     icon: '📊' },
@@ -1073,6 +1100,9 @@ interface ProfileViewProps {
 
   // ── Экран привязки ──
   if (!linkedEmp || isLinking) {
+    const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+    const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
+    const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
     return (
       <div className="space-y-4 pb-6">
         {/* Шапка */}
@@ -1176,6 +1206,9 @@ interface ProfileViewProps {
   }
 
   // ── Основной профиль ──
+  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+  const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
+  const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
   return (
     <div className="w-full space-y-4 pb-6">
       {/* Шапка, навигация, контент секций — ...existing code... */}
@@ -1250,4 +1283,3 @@ interface ProfileViewProps {
       </div>
     </div>
   );
-};
