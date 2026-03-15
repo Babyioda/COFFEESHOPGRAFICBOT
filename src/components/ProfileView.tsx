@@ -108,8 +108,9 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         'sf_tg_name',
       ];
       keys.forEach(k => localStorage.removeItem(k));
-      // Сбросить привязку сотрудника через onUnlinkEmployee
-      if (typeof onUnlinkEmployee === 'function') onUnlinkEmployee();
+      setLinkedEmpId(null); // сбросить привязку
+      onLinkedEmpChange(null); // уведомить родителя
+      setIsLinking(true); // показать экран авторизации
       if (tg && tg.showAlert) {
         tg.showAlert('✅ Данные успешно очищены!\nВы вышли из аккаунта.', () => {});
       } else {
