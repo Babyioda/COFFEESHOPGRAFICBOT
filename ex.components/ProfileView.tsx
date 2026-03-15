@@ -92,6 +92,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       : (msg: string, cb: (confirmed: boolean) => void) => cb(window.confirm(msg));
     confirm('Вы уверены, что хотите полностью очистить все локальные данные?\n\nВас потребуется заново привязать профиль.', (confirmed: boolean) => {
       if (!confirmed) return;
+      // Ключи, которые нужно удалить
       const keys = [
         'sf_linked_emp_id',
         'sf_tg_links',
@@ -108,6 +109,8 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         'sf_tg_name',
       ];
       keys.forEach(k => localStorage.removeItem(k));
+      // Очищаем всё, если нужно (альтернативно)
+      // localStorage.clear();
       if (tg && tg.showAlert) {
         tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
       } else {
@@ -115,6 +118,81 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         window.location.reload();
       }
     });
+  };
+
+  // Реалтайм-подписка на настройки сотрудника (день рождения, Telegram, username), правила и заметки
+  useEffect(() => {
+    if (!linkedEmp) return;
+    setPrefsLoaded(false);
+    console.log('[ProfileView] Setting up Firebase listeners for:', linkedEmp.id);
+    const unsubscribers: (() => void)[] = [];
+    
+    try {
+      // Подписка на все prefs
+      const unsubPrefs = watchEmpPrefs((allPrefs) => {
+        try {
+          const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
+          console.log('[ProfileView] Firebase prefs updated:', { empId: linkedEmp.id, prefs: p });
+          setShowTelegramPref(!!p.showTelegram);
+          if (p.birthday) {
+            setBirthdayInput(`2000-${p.birthday}`);
+          } else {
+            setBirthdayInput('');
+          }
+          if (p.customUsername) {
+            console.log('[ProfileView] Loaded customUsername from Firebase:', p.customUsername);
+            setManualUsername(p.customUsername);
+          } else {
+            setManualUsername('');
+          }
+          setPrefsLoaded(true);
+        } catch (err) {
+          console.error('[ProfileView] Error processing prefs:', err);
+          setPrefsLoaded(true);
+        }
+      });
+      unsubscribers.push(unsubPrefs);
+
+      // Подписка на employee rules (часы работы)
+      const unsubRules = watchEmpRules((allRules) => {
+        try {
+          const rule = allRules.find(r => r.empId === linkedEmp.id);
+          if (rule && rule.hours) {
+            console.log('[ProfileView] Rules updated for:', linkedEmp.id);
+            // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
+            // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
+          }
+        } catch (err) {
+          console.error('[ProfileView] Error processing rules:', err);
+        }
+      });
+      unsubscribers.push(unsubRules);
+
+      // Подписка на employee notes (заметки)
+      const unsubNotes = watchEmpNotes((allNotes) => {
+        try {
+          const note = allNotes.find(n => n.empId === linkedEmp.id);
+          if (note) {
+            console.log('[ProfileView] Notes updated for:', linkedEmp.id);
+            // Можно добавить setNoteText(note.note) если нужно live-отображение
+          }
+        } catch (err) {
+          console.error('[ProfileView] Error processing notes:', err);
+        }
+      });
+      unsubscribers.push(unsubNotes);
+    } catch (err) {
+      console.error('[ProfileView] Failed to set up Firebase listeners:', err);
+      setPrefsLoaded(true);
+    }
+
+    return () => {
+      console.log('[ProfileView] Cleaning up Firebase listeners for:', linkedEmp.id);
+      unsubscribers.forEach(unsub => {
+        try { unsub?.(); } catch (err) { console.error('[ProfileView] Error unsubscribing:', err); }
+      });
+    };
+  }, [linkedEmp]);
 
   useEffect(() => {
     setFakeDateEnabled(!!fakeDate);
@@ -165,7 +243,15 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       </div>
 
-      {/* (Удалено: Очистка localStorage из настроек) */}
+      {/* Очистка localStorage */}
+      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🧹 Очистить данные</h3>
+        <p className={`text-xs mb-3 ${sub}`}>Полностью удалить все локальные данные и привязки на этом устройстве.</p>
+        <button
+          onClick={handleClearLocalStorage}
+          className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-red-600"
+        >Очистить данные</button>
+      </div>
 
       {/* Google Sheets — только администраторы */}
       {isAdmin && (
@@ -392,123 +478,83 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       )}
 
       {/* Отправка отладки администраторам — теперь: копирование или открытие чата */}
-      {/* Отладка: теперь тут и очистка, и расширенный тест Firebase */}
-      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
-        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={async () => {
-              setCopyingDebug?.(true);
-              try {
-                const allRoles = linkedEmp?.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp?.role];
-                const dept = linkedEmp?.department ?? getDepartment(linkedEmp?.role);
-                const usernameText = tgUser?.username ? '@' + tgUser.username : 'не указан';
-                const info = [
-                  '🐛 ОТЛАДКА ОТ ПОЛЬЗОВАТЕЛЯ',
-                  '',
-                  `Сотрудник: ${linkedEmp?.name}`,
-                  `Отдел: ${dept}`,
-                  `Должности: ${allRoles?.join(', ')}`,
-                  `Username: ${usernameText}`,
-                  `TG ID: ${tgId ?? 'не указан'}`,
-                  '',
-                  `Отправлено: ${new Date().toLocaleString('ru-RU')}`,
-                ].join('\n');
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                  await navigator.clipboard.writeText(info);
-                } else {
-                  const ta = document.createElement('textarea');
-                  ta.value = info;
-                  document.body.appendChild(ta);
-                  ta.select();
-                  document.execCommand('copy');
-                  document.body.removeChild(ta);
+      {linkedEmp && (
+        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+          <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={async () => {
+                setCopyingDebug(true);
+                try {
+                  const allRoles = linkedEmp.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp.role];
+                  const dept = linkedEmp.department ?? getDepartment(linkedEmp.role);
+                  const usernameText = tgUser?.username ? '@' + tgUser.username : 'не указан';
+                  const info = [
+                    '🐛 ОТЛАДКА ОТ ПОЛЬЗОВАТЕЛЯ',
+                    '',
+                    `Сотрудник: ${linkedEmp.name}`,
+                    `Отдел: ${dept}`,
+                    `Должности: ${allRoles.join(', ')}`,
+                    `Username: ${usernameText}`,
+                    `TG ID: ${tgId ?? 'не указан'}`,
+                    '',
+                    `Отправлено: ${new Date().toLocaleString('ru-RU')}`,
+                  ].join('\n');
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(info);
+                  } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = info;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                  }
+                  alert('✅ Информация для отладки скопирована в буфер обмена');
+                } catch (err) {
+                  console.error('Ошибка копирования отладки:', err);
+                  alert('❌ Не удалось скопировать отладку');
+                } finally {
+                  setCopyingDebug(false);
                 }
-                alert('✅ Информация для отладки скопирована в буфер обмена');
-              } catch (err) {
-                console.error('Ошибка копирования отладки:', err);
-                alert('❌ Не удалось скопировать отладку');
-              } finally {
-                setCopyingDebug?.(false);
-              }
-            }}
-            className={`py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-amber-400 hover:bg-amber-500 text-white`}
-          >📋 Копировать отладку</button>
-          <button
-            onClick={() => {
-              const url = 'https://t.me/milkaaasss';
-              window.open(url, '_blank');
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-sky-500 hover:bg-sky-600 text-white"
-          >💬 Отправить</button>
-          <button
-            onClick={async () => {
-              try {
-                // Новый тест: запись, чтение, удаление
-                const testKey = 'test_' + Math.random().toString(36).slice(2, 8);
-                const testValue = { test: true, time: Date.now() };
-                // @ts-ignore
-                const db = (await import('../utils/firebase')).db;
-                // @ts-ignore
-                const { setDoc, getDoc, deleteDoc, doc } = await import('firebase/firestore');
-                const ref = doc(db, 'debug', testKey);
-                await setDoc(ref, testValue);
-                const snap = await getDoc(ref);
-                await deleteDoc(ref);
-                if (snap.exists()) {
-                  alert('✅ Firebase тест: запись/чтение/удаление успешно. См. консоль для деталей.');
-                  console.log('[FirebaseTest] OK', { testKey, data: snap.data() });
-                } else {
-                  alert('❌ Firebase тест: не удалось прочитать данные.');
-                }
-              } catch (e) {
-                alert('❌ Firebase тест: ошибка. См. консоль.');
-                console.error('[FirebaseTest] Ошибка:', e);
-              }
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
-          >🔌 Тест Firebase</button>
-          <button
-            onClick={() => {
-              const tg = window.Telegram?.WebApp;
-              const confirm = tg
-                ? tg.showConfirm
-                : (msg: string, cb: (confirmed: boolean) => void) => cb(window.confirm(msg));
-              confirm('Вы уверены, что хотите полностью очистить все локальные данные?\n\nВас потребуется заново привязать профиль.', (confirmed: boolean) => {
-                if (!confirmed) return;
-                const keys = [
-                  'sf_linked_emp_id',
-                  'sf_tg_links',
-                  'sf_emp_prefs',
-                  'sf_admin_shift_edits',
-                  'sf_admin_emp_notes',
-                  'sf_admin_emp_rules',
-                  'ss_sheet_id',
-                  'ss_sheet_gid',
-                  'ss_sheets_api_key',
-                  'ss_apps_script_url',
-                  'sf_friends_ids',
-                  'sf_invite_codes',
-                  'sf_tg_name',
-                ];
-                keys.forEach(k => localStorage.removeItem(k));
-                if (tg && tg.showAlert) {
-                  tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
-                } else {
-                  alert('✅ Данные успешно очищены!\nСтраница будет перезагружена.');
-                  window.location.reload();
-                }
-              });
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-red-500 hover:bg-red-600 text-white"
-          >🧹 Очистить данные</button>
+              }}
+              disabled={copyingDebug}
+              className={`py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all ${
+                copyingDebug ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-amber-400 hover:bg-amber-500 text-white'
+              }`}
+            >
+              {copyingDebug ? '⏳ Копирую...' : '📋 Копировать отладку'}
+            </button>
+
+            <button
+              onClick={() => {
+                const url = 'https://t.me/milkaaasss';
+                window.open(url, '_blank');
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-sky-500 hover:bg-sky-600 text-white"
+            >
+              💬 Отправить
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await testConnection();
+                  alert('Проверка отправлена в консоль');
+                } catch {}
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
+            >
+              🔌 Тест Firebase
+            </button>
+          </div>
+          <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
         </div>
-        <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
-      </div>
+      )}
 
 
     </div>
   );
+};
 
 // ── Admin Panel ───────────────────────────────────────────────────
 interface AdminPanelProps {
@@ -1212,76 +1258,131 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   // ── Основной профиль ──
   return (
     <div className="w-full space-y-4 pb-6">
-      {/* Шапка, навигация, контент секций — ...existing code... */}
-      {/* ...existing code... */}
-
-      {/* Блок отладки всегда видим (после секций) */}
-      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
-        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={async () => {
-              try {
-                const testKey = 'test_' + Math.random().toString(36).slice(2, 8);
-                const testValue = { test: true, time: Date.now() };
-                // @ts-ignore
-                const db = (await import('../utils/firebase')).db;
-                // @ts-ignore
-                const { setDoc, getDoc, deleteDoc, doc } = await import('firebase/firestore');
-                const ref = doc(db, 'debug', testKey);
-                await setDoc(ref, testValue);
-                const snap = await getDoc(ref);
-                await deleteDoc(ref);
-                if (snap.exists()) {
-                  alert('✅ Firebase тест: запись/чтение/удаление успешно. См. консоль для деталей.');
-                  console.log('[FirebaseTest] OK', { testKey, data: snap.data() });
-                } else {
-                  alert('❌ Firebase тест: не удалось прочитать данные.');
-                }
-              } catch (e) {
-                alert('❌ Firebase тест: ошибка. См. консоль.');
-                console.error('[FirebaseTest] Ошибка:', e);
-              }
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
-          >🔌 Тест Firebase</button>
-          <button
-            onClick={() => {
-              const tg = window.Telegram?.WebApp;
-              const confirm = tg
-                ? tg.showConfirm
-                : (msg: string, cb: (confirmed: boolean) => void) => cb(window.confirm(msg));
-              confirm('Вы уверены, что хотите полностью очистить все локальные данные?\n\nВас потребуется заново привязать профиль.', (confirmed: boolean) => {
-                if (!confirmed) return;
-                const keys = [
-                  'sf_linked_emp_id',
-                  'sf_tg_links',
-                  'sf_emp_prefs',
-                  'sf_admin_shift_edits',
-                  'sf_admin_emp_notes',
-                  'sf_admin_emp_rules',
-                  'ss_sheet_id',
-                  'ss_sheet_gid',
-                  'ss_sheets_api_key',
-                  'ss_apps_script_url',
-                  'sf_friends_ids',
-                  'sf_invite_codes',
-                  'sf_tg_name',
-                ];
-                keys.forEach(k => localStorage.removeItem(k));
-                if (tg && tg.showAlert) {
-                  tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
-                } else {
-                  alert('✅ Данные успешно очищены!\nСтраница будет перезагружена.');
-                  window.location.reload();
-                }
-              });
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-red-500 hover:bg-red-600 text-white"
-          >🧹 Очистить данные</button>
+      {/* Шапка */}
+      <div className="rounded-3xl overflow-hidden shadow-lg">
+        <div className="p-5 text-white" style={{ background: headerGradient }}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              {tgUser?.photo_url ? (
+                <div className="relative">
+                  <img src={tgUser.photo_url} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-white" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-extrabold shadow-inner">
+                  {linkedEmp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                </div>
+              )}
+              <div>
+                <h2 className="font-extrabold text-xl leading-tight">{tgName ?? linkedEmp.name}</h2>
+                {tgName && tgName !== linkedEmp.name && <p className="text-white/60 text-xs">{linkedEmp.name}</p>}
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {deptCfg && <span className="text-xs font-semibold bg-white/20 rounded-full px-2 py-0.5">{deptCfg.icon} {deptCfg.label}</span>}
+                  <span className="text-xs bg-white/10 rounded-full px-2 py-0.5">{linkedEmp.role}</span>
+                </div>
+              </div>
+            </div>
+            {isAdmin && <button onClick={() => setIsLinking(true)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-sm active:scale-95">✎</button>}
+          </div>
         </div>
-        <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
       </div>
+
+      {/* Навигация — горизонтальная сетка */}
+      <div className="grid grid-cols-4 gap-2">
+        {SECTIONS.map(sec => (
+          <button
+            key={sec.id}
+            onClick={() => setActiveSection(sec.id)}
+            className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all active:scale-95 ${
+              activeSection === sec.id
+                ? 'bg-indigo-500 border-indigo-500 shadow-md'
+                : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100 shadow-sm'
+            }`}
+          >
+            <span className="text-xl">{sec.icon}</span>
+            <span className={`text-[10px] font-semibold text-center leading-tight ${
+              activeSection === sec.id ? 'text-white' : isDark ? 'text-slate-300' : 'text-gray-600'
+            }`}>{sec.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Контент */}
+      {activeSection === 'reports' && (
+        <ReportsSection data={data} linkedEmpId={linkedEmpId} />
+      )}
+
+      {activeSection === 'staff' && (
+        <StaffSection data={data} today={today} month={month} year={year} linkedEmpId={linkedEmpId} />
+      )}
+
+      {activeSection === 'settings' && (
+        <SettingsSection
+          sheetId={sheetId} sheetGid={sheetGid}
+          sheetsApiKey={sheetsApiKey}
+          appsScriptUrl={appsScriptUrl}
+          onSave={onSave} lastSync={lastSync}
+          isLoading={isLoading} onRefresh={onRefresh}
+          error={error} fakeDate={fakeDate}
+          onFakeDateChange={onFakeDateChange}
+          isAdmin={isAdmin}
+          onOpenAdminPanel={() => setShowAdminPanel(true)}
+          linkedEmp={linkedEmp}
+          tgUser={tgUser}
+          tgId={tgId}
+          onEmployeeUpdate={onEmployeeUpdate}
+        />
+      )}
+
+      {showAdminPanel && (
+        <AdminPanel
+          data={data}
+          onClose={() => setShowAdminPanel(false)}
+          lastSync={lastSync}
+          isLoading={isLoading}
+          error={error}
+          onRefresh={onRefresh}
+          onEmployeeUpdate={onEmployeeUpdate}
+        />
+      )}
+
+      {activeSection === 'bugreport' && (
+        <div className={`rounded-2xl p-5 border shadow-sm ${card}`}>
+          <div className="text-center mb-5">
+            <p className="text-4xl mb-2">🐛</p>
+            <p className={`font-bold text-base mb-1 ${lbl}`}>Обратная связь</p>
+            <p className={`text-sm ${sub}`}>Нашёл ошибку или есть идея? Напиши нам!</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <a
+              href="https://t.me/silaysilaysilay"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 transition-colors"
+            >
+              <span className="text-2xl">🐞</span>
+              <div className="flex-1 text-left">
+                <p className="text-white font-semibold text-sm">Баги и ошибки</p>
+                <p className="text-red-100 text-xs">@silaysilaysilay</p>
+              </div>
+              <span className="text-white text-lg">→</span>
+            </a>
+            <a
+              href="https://t.me/milkaaasss"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 transition-colors"
+            >
+              <span className="text-2xl">💡</span>
+              <div className="flex-1 text-left">
+                <p className="text-white font-semibold text-sm">Идеи и предложения</p>
+                <p className="text-indigo-100 text-xs">@milkaaasss</p>
+              </div>
+              <span className="text-white text-lg">→</span>
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

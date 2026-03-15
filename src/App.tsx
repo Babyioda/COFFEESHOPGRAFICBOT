@@ -285,8 +285,8 @@ function AppInner() {
 
   const scheduleData = liveData ?? demoData;
 
-  // Если пользователь не привязан — всегда на профиле
-  const effectiveTab = !linkedEmpId && activeTab === 'shifts' ? 'profile' : activeTab;
+  // Разрешить вкладку смены для всех (убрать принудительный редирект)
+  const effectiveTab = activeTab;
 
 
 
