@@ -1,3 +1,28 @@
+/**
+ * Расширенный тест Firestore: запись, чтение и удаление документа для проверки индексов и прав.
+ * Выводит подробные логи в консоль.
+ */
+export async function testWriteReadDelete(collectionName: string = 'test_index_check') {
+  const testId = 'test_doc_' + Math.floor(Math.random() * 1000000);
+  const testRef = doc(db, collectionName, testId);
+  try {
+    // 1. Запись
+    await setDoc(testRef, { test: 'index_check', ts: serverTimestamp() });
+    console.log(`[Firebase] ✅ Запись в ${collectionName}/${testId} успешна`);
+    // 2. Чтение
+    const snap = await getDocs(query(collection(db, collectionName), where('__name__', '==', testId)));
+    if (!snap.empty) {
+      console.log(`[Firebase] ✅ Чтение из ${collectionName}:`, snap.docs[0].id, snap.docs[0].data());
+    } else {
+      console.warn(`[Firebase] ⚠️ Документ ${testId} не найден при чтении из ${collectionName}`);
+    }
+    // 3. Удаление
+    await deleteDoc(testRef);
+    console.log(`[Firebase] ✅ Удаление из ${collectionName}/${testId} успешно`);
+  } catch (err: any) {
+    console.error(`[Firebase] ❌ Ошибка при тесте записи/чтения/удаления в ${collectionName}:`, err.code, err.message);
+  }
+}
 import { initializeApp } from 'firebase/app';
 import {
   getFirestore,

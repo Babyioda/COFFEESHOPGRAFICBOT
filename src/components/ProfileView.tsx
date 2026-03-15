@@ -115,6 +115,81 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         window.location.reload();
       }
     });
+  };
+
+  // Реалтайм-подписка на настройки сотрудника (день рождения, Telegram, username), правила и заметки
+  useEffect(() => {
+    if (!linkedEmp) return;
+    setPrefsLoaded(false);
+    console.log('[ProfileView] Setting up Firebase listeners for:', linkedEmp.id);
+    const unsubscribers: (() => void)[] = [];
+    
+    try {
+      // Подписка на все prefs
+      const unsubPrefs = watchEmpPrefs((allPrefs) => {
+        try {
+          const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
+          console.log('[ProfileView] Firebase prefs updated:', { empId: linkedEmp.id, prefs: p });
+          setShowTelegramPref(!!p.showTelegram);
+          if (p.birthday) {
+            setBirthdayInput(`2000-${p.birthday}`);
+          } else {
+            setBirthdayInput('');
+          }
+          if (p.customUsername) {
+            console.log('[ProfileView] Loaded customUsername from Firebase:', p.customUsername);
+            setManualUsername(p.customUsername);
+          } else {
+            setManualUsername('');
+          }
+          setPrefsLoaded(true);
+        } catch (err) {
+          console.error('[ProfileView] Error processing prefs:', err);
+          setPrefsLoaded(true);
+        }
+      });
+      unsubscribers.push(unsubPrefs);
+
+      // Подписка на employee rules (часы работы)
+      const unsubRules = watchEmpRules((allRules) => {
+        try {
+          const rule = allRules.find(r => r.empId === linkedEmp.id);
+          if (rule && rule.hours) {
+            console.log('[ProfileView] Rules updated for:', linkedEmp.id);
+            // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
+            // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
+          }
+        } catch (err) {
+          console.error('[ProfileView] Error processing rules:', err);
+        }
+      });
+      unsubscribers.push(unsubRules);
+
+      // Подписка на employee notes (заметки)
+      const unsubNotes = watchEmpNotes((allNotes) => {
+        try {
+          const note = allNotes.find(n => n.empId === linkedEmp.id);
+          if (note) {
+            console.log('[ProfileView] Notes updated for:', linkedEmp.id);
+            // Можно добавить setNoteText(note.note) если нужно live-отображение
+          }
+        } catch (err) {
+          console.error('[ProfileView] Error processing notes:', err);
+        }
+      });
+      unsubscribers.push(unsubNotes);
+    } catch (err) {
+      console.error('[ProfileView] Failed to set up Firebase listeners:', err);
+      setPrefsLoaded(true);
+    }
+
+    return () => {
+      console.log('[ProfileView] Cleaning up Firebase listeners for:', linkedEmp.id);
+      unsubscribers.forEach(unsub => {
+        try { unsub?.(); } catch (err) { console.error('[ProfileView] Error unsubscribing:', err); }
+      });
+    };
+  }, [linkedEmp]);
 
   useEffect(() => {
     setFakeDateEnabled(!!fakeDate);
@@ -149,6 +224,18 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
 
   return (
+        // Блок отладки
+        const renderDebugBlock = () => (
+          <div style={{ marginTop: 24, padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>🛠️ Отладка</div>
+            <button
+              style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', marginBottom: 8 }}
+              onClick={handleClearLocalStorage}
+            >
+              Очистить все локальные данные
+            </button>
+          </div>
+        );
     <div className="space-y-4 pb-6">
       {/* Тема */}
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
@@ -165,7 +252,15 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       </div>
 
-      {/* (Удалено: Очистка localStorage из настроек) */}
+      {/* Очистка localStorage */}
+      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🧹 Очистить данные</h3>
+        <p className={`text-xs mb-3 ${sub}`}>Полностью удалить все локальные данные и привязки на этом устройстве.</p>
+        <button
+          onClick={handleClearLocalStorage}
+          className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-red-600"
+        >Очистить данные</button>
+      </div>
 
       {/* Google Sheets — только администраторы */}
       {isAdmin && (
@@ -392,130 +487,83 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       )}
 
       {/* Отправка отладки администраторам — теперь: копирование или открытие чата */}
-      {/* Отладка: теперь тут и очистка, и расширенный тест Firebase */}
-      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
-        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={async () => {
-              setCopyingDebug?.(true);
-              try {
-                const allRoles = linkedEmp?.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp?.role];
-                const dept = linkedEmp?.department ?? getDepartment(linkedEmp?.role);
-                const usernameText = tgUser?.username ? '@' + tgUser.username : 'не указан';
-                const info = [
-                  '🐛 ОТЛАДКА ОТ ПОЛЬЗОВАТЕЛЯ',
-                  '',
-                  `Сотрудник: ${linkedEmp?.name}`,
-                  `Отдел: ${dept}`,
-                  `Должности: ${allRoles?.join(', ')}`,
-                  `Username: ${usernameText}`,
-                  `TG ID: ${tgId ?? 'не указан'}`,
-                  '',
-                  `Отправлено: ${new Date().toLocaleString('ru-RU')}`,
-                ].join('\n');
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                  await navigator.clipboard.writeText(info);
-                } else {
-                  const ta = document.createElement('textarea');
-                  ta.value = info;
-                  document.body.appendChild(ta);
-                  ta.select();
-                  document.execCommand('copy');
-                  document.body.removeChild(ta);
+      {linkedEmp && (
+        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+          <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={async () => {
+                setCopyingDebug(true);
+                try {
+                  const allRoles = linkedEmp.roles && linkedEmp.roles.length > 0 ? linkedEmp.roles : [linkedEmp.role];
+                  const dept = linkedEmp.department ?? getDepartment(linkedEmp.role);
+                  const usernameText = tgUser?.username ? '@' + tgUser.username : 'не указан';
+                  const info = [
+                    '🐛 ОТЛАДКА ОТ ПОЛЬЗОВАТЕЛЯ',
+                    '',
+                    `Сотрудник: ${linkedEmp.name}`,
+                    `Отдел: ${dept}`,
+                    `Должности: ${allRoles.join(', ')}`,
+                    `Username: ${usernameText}`,
+                    `TG ID: ${tgId ?? 'не указан'}`,
+                    '',
+                    `Отправлено: ${new Date().toLocaleString('ru-RU')}`,
+                  ].join('\n');
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(info);
+                  } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = info;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                  }
+                  alert('✅ Информация для отладки скопирована в буфер обмена');
+                } catch (err) {
+                  console.error('Ошибка копирования отладки:', err);
+                  alert('❌ Не удалось скопировать отладку');
+                } finally {
+                  setCopyingDebug(false);
                 }
-                alert('✅ Информация для отладки скопирована в буфер обмена');
-              } catch (err) {
-                console.error('Ошибка копирования отладки:', err);
-                alert('❌ Не удалось скопировать отладку');
-              } finally {
-                setCopyingDebug?.(false);
-              }
-            }}
-            className={`py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-amber-400 hover:bg-amber-500 text-white`}
-          >📋 Копировать отладку</button>
-          <button
-            onClick={() => {
-              const url = 'https://t.me/milkaaasss';
-              window.open(url, '_blank');
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-sky-500 hover:bg-sky-600 text-white"
-          >💬 Отправить</button>
-          <button
-            onClick={async () => {
-              try {
-                // Новый тест: запись, чтение, удаление
-                const testKey = 'test_' + Math.random().toString(36).slice(2, 8);
-                const testValue = { test: true, time: Date.now() };
-                // @ts-ignore
-                const db = (await import('../utils/firebase')).db;
-                // @ts-ignore
-                const { setDoc, getDoc, deleteDoc, doc } = await import('firebase/firestore');
-                const ref = doc(db, 'debug', testKey);
-                await setDoc(ref, testValue);
-                const snap = await getDoc(ref);
-                await deleteDoc(ref);
-                if (snap.exists()) {
-                  alert('✅ Firebase тест: запись/чтение/удаление успешно. См. консоль для деталей.');
-                  console.log('[FirebaseTest] OK', { testKey, data: snap.data() });
-                } else {
-                  alert('❌ Firebase тест: не удалось прочитать данные.');
-                }
-              } catch (e) {
-                alert('❌ Firebase тест: ошибка. См. консоль.');
-                console.error('[FirebaseTest] Ошибка:', e);
-              }
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
-          >🔌 Тест Firebase</button>
-          <button
-            onClick={() => {
-              const tg = window.Telegram?.WebApp;
-              const confirm = tg
-                ? tg.showConfirm
-                : (msg: string, cb: (confirmed: boolean) => void) => cb(window.confirm(msg));
-              confirm('Вы уверены, что хотите полностью очистить все локальные данные?\n\nВас потребуется заново привязать профиль.', (confirmed: boolean) => {
-                if (!confirmed) return;
-                const keys = [
-                  'sf_linked_emp_id',
-                  'sf_tg_links',
-                  'sf_emp_prefs',
-                  'sf_admin_shift_edits',
-                  'sf_admin_emp_notes',
-                  'sf_admin_emp_rules',
-                  'ss_sheet_id',
-                  'ss_sheet_gid',
-                  'ss_sheets_api_key',
-                  'ss_apps_script_url',
-                  'sf_friends_ids',
-                  'sf_invite_codes',
-                  'sf_tg_name',
-                ];
-                keys.forEach(k => localStorage.removeItem(k));
-                if (tg && tg.showAlert) {
-                  tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
-                } else {
-                  alert('✅ Данные успешно очищены!\nСтраница будет перезагружена.');
-                  window.location.reload();
-                }
-              });
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-red-500 hover:bg-red-600 text-white"
-          >🧹 Очистить данные</button>
+              }}
+              disabled={copyingDebug}
+              className={`py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all ${
+                copyingDebug ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-amber-400 hover:bg-amber-500 text-white'
+              }`}
+            >
+              {copyingDebug ? '⏳ Копирую...' : '📋 Копировать отладку'}
+            </button>
+
+            <button
+              onClick={() => {
+                const url = 'https://t.me/milkaaasss';
+                window.open(url, '_blank');
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-sky-500 hover:bg-sky-600 text-white"
+            >
+              💬 Отправить
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await testConnection();
+                  alert('Проверка отправлена в консоль');
+                } catch {}
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
+            >
+              🔌 Тест Firebase
+            </button>
+          </div>
+          <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
         </div>
-        <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
-      </div>
+      )}
 
 
     </div>
   );
-}
-
-// Минимальный валидный экспорт компонента (заглушка, чтобы не было синтаксических ошибок)
-export default function ProfileView() {
-  return <div>ProfileView заглушка: компонент в процессе восстановления.</div>;
-}
-}
+};
 
 // ── Admin Panel ───────────────────────────────────────────────────
 interface AdminPanelProps {
@@ -807,91 +855,543 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                 </div>
               )}
             </div>
+            <div className={`px-5 pb-6 flex gap-2 border-t ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
+              <button
+                onClick={() => setEditingEmp(null)}
+                className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-all active:scale-95 ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'}`}
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  if (editingEmp) {
+                    if (editTab === 'notes') {
+                      saveEmpNote(editingEmp.id, noteText);
+                    } else {
+                      saveEmpRule(editingEmp.id, { start: ruleStart, end: ruleEnd });
+                    }
+                    // save admin prefs as well
+                    const mmdd = adminBirthdayInput ? adminBirthdayInput.slice(5) : '';
+                    saveEmpPrefs({ empId: editingEmp.id, showTelegram: adminShowTelegram, birthday: mmdd });
+                    editingEmp.showTelegram = adminShowTelegram;
+                    editingEmp.birthday = mmdd;
+                    const upd = onEmployeeUpdate;
+                    if (upd && editingEmp) {
+                      upd({...editingEmp});
+                    }
+                  }
+                  setEditingEmp(null);
+                }}
+                className="flex-grow flex-2 py-3 rounded-2xl text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition-all active:scale-95"
+              >
+                Сохранить
+              </button>
+            </div>
           </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+// ── Staff Section ─────────────────────────────────────────────────
+interface StaffSectionProps {
+  data: ScheduleData;
+  today: Date;
+  month: number;
+  year: number;
+  linkedEmpId: string | null;
+  isAdmin?: boolean;
+}
+const StaffSection: React.FC<StaffSectionProps> = ({ data, today, month, year, isAdmin = false }) => {
+  const { isDark } = useTheme();
+  const [activeDept, setActiveDept]   = useState<Department | 'all'>('all');
+  const [friendIds, setFriendIds]     = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_FRIENDS_IDS) || '[]'); } catch { return []; }
+  });
+  const [search, setSearch]           = useState('');
+  const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
+
+  const toggleFriend = (id: string) => {
+    setFriendIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem(STORAGE_FRIENDS_IDS, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const filtered = data.employees.filter(emp => {
+    if (search && !emp.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (activeDept === 'all') return true;
+    const allRoles = emp.roles && emp.roles.length > 0 ? emp.roles : [emp.role];
+    return allRoles.some(r => getDepartment(r) === activeDept);
+  });
+
+  const friends    = filtered.filter(e => friendIds.includes(e.id));
+  const byDept     = DEPT_ORDER.reduce((acc, d) => {
+    acc[d] = filtered.filter(e => {
+      const allRoles = e.roles && e.roles.length > 0 ? e.roles : [e.role];
+      return allRoles.some(r => getDepartment(r) === d);
+    });
+    return acc;
+  }, {} as Record<Department, Employee[]>);
+
+  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+  const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
+
+  if (selectedEmp) {
+    return (
+      <EmployeeCard
+        emp={selectedEmp}
+        data={data}
+        today={today}
+        month={month}
+        year={year}
+        isAdmin={isAdmin}
+        isFriend={friendIds.includes(selectedEmp.id)}
+        onToggleFriend={toggleFriend}
+        onClose={() => setSelectedEmp(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Поиск */}
+      <div className={`rounded-2xl border shadow-sm p-3 ${card}`}>
+        <input
+          type="text" value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="🔍 Поиск сотрудника..."
+          className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-700 placeholder-gray-400'}`}
+        />
+      </div>
+
+      {/* Фильтр */}
+      <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+        {([
+          { id: 'all', label: 'Все', icon: '👥' },
+          ...DEPT_ORDER.map(d => ({ id: d, label: DEPARTMENT_CONFIG[d].label, icon: DEPARTMENT_CONFIG[d].icon })),
+        ] as { id: Department | 'all'; label: string; icon: string }[]).map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveDept(tab.id)}
+            className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
+              activeDept === tab.id
+                ? 'bg-indigo-500 text-white shadow-sm'
+                : isDark ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-white text-gray-500 border border-gray-200'
+            }`}
+          >{tab.icon} {tab.label}</button>
+        ))}
+      </div>
+
+      {/* Друзья */}
+      {friends.length > 0 && (
+        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
+          <div className={`px-4 py-2.5 border-b ${isDark ? 'border-slate-700 bg-slate-700/50' : 'border-gray-50 bg-amber-50'}`}>
+            <span className={`text-xs font-bold ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>⭐ ДРУЗЬЯ</span>
+          </div>
+          {friends.map((emp, i) => (
+            <EmpRow key={emp.id} emp={emp} isFriend={true} onToggleFriend={toggleFriend}
+              onOpen={() => setSelectedEmp(emp)} isLast={i === friends.length - 1} />
+          ))}
+        </div>
+      )}
+
+      {/* По отделам */}
+      {DEPT_ORDER.map(dept => {
+        const emps = byDept[dept];
+        if (!emps || emps.length === 0) return null;
+        const cfg = DEPARTMENT_CONFIG[dept];
+        return (
+          <div key={dept} className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
+            <div className={`px-4 py-2.5 border-b ${isDark ? 'border-slate-700' : 'border-gray-50'}`}
+              style={{ backgroundColor: cfg.color + '15' }}>
+              <span className="text-xs font-bold" style={{ color: cfg.color }}>{cfg.icon} {cfg.label.toUpperCase()}</span>
+            </div>
+            {emps.map((emp, i) => (
+              <EmpRow key={emp.id + dept} emp={emp} isFriend={friendIds.includes(emp.id)}
+                onToggleFriend={toggleFriend} onOpen={() => setSelectedEmp(emp)} isLast={i === emps.length - 1} />
+            ))}
+          </div>
+        );
+      })}
+
+      {filtered.length === 0 && (
+        <div className={`rounded-2xl p-8 border text-center ${card}`}>
+          <p className="text-3xl mb-2">🔍</p>
+          <p className={`text-sm ${sub}`}>Никого не найдено</p>
         </div>
       )}
     </div>
   );
+};
+
+// ── Emp Row ───────────────────────────────────────────────────────
+interface EmpRowProps {
+  emp: Employee; isFriend: boolean;
+  onToggleFriend: (id: string) => void;
+  onOpen: () => void; isLast: boolean;
 }
+const EmpRow: React.FC<EmpRowProps> = ({ emp, isFriend, onToggleFriend, onOpen, isLast }) => {
+  const { isDark } = useTheme();
+  const sub = isDark ? 'text-slate-400' : 'text-gray-500';
+  const lbl = isDark ? 'text-slate-100' : 'text-gray-900';
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 transition-all ${!isLast ? isDark ? 'border-b border-slate-700' : 'border-b border-gray-50' : ''}`}>
+      <div
+        className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 cursor-pointer active:scale-95"
+        style={{ backgroundColor: emp.color }} onClick={onOpen}
+      >
+        {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+      </div>
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={onOpen}>
+        <p className={`text-sm font-semibold truncate ${lbl}`}>{emp.name}</p>
+        <p className={`text-xs truncate ${sub}`}>{emp.role}</p>
+      </div>
+      <button
+        onClick={e => { e.stopPropagation(); onToggleFriend(emp.id); }}
+        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all active:scale-90 flex-shrink-0 ${
+          isFriend ? 'bg-amber-100 text-amber-500' : isDark ? 'bg-slate-700 text-slate-500' : 'bg-gray-100 text-gray-400'
+        }`}
+      >
+        {isFriend ? '⭐' : '☆'}
+      </button>
+    </div>
+  );
+};
+
+// ── ProfileView ───────────────────────────────────────────────────
+interface ProfileViewProps {
+  data: ScheduleData;
+  month: number; year: number;
+  fakeDate: Date | null;
+  sheetId: string; sheetGid: string;
+  sheetsApiKey?: string;
+  appsScriptUrl?: string;
+  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string) => void;
+  lastSync: string | null;
+  isLoading: boolean; onRefresh: () => void;
+  error: string | null;
+  onFakeDateChange: (d: Date | null) => void;
+  onLinkedEmpChange: (id: string | null) => void;
+  onMonthChange?: (month: number, year: number) => void;
+  onEmployeeUpdate?: (emp: Employee) => void;
+}
+
+export const ProfileView: React.FC<ProfileViewProps> = ({
+  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '',
+  onSave, lastSync, isLoading, onRefresh, error,
+  onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
+  onEmployeeUpdate,
+}) => {
+  const { isDark } = useTheme();
+  const today = fakeDate ?? new Date();
+
+  const [activeSection, setActiveSection] = useState<ProfileSection>('staff');
+  const [linkedEmpId, setLinkedEmpId]     = useState<string | null>(() => getLinkedEmpId());
+  const [tgName, setTgName]               = useState<string | null>(() => localStorage.getItem(STORAGE_TG_NAME));
+  const [isLinking, setIsLinking]         = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [searchResults, setSearchResults] = useState<Employee[]>([]);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
+
+  const tgUser = getTgUser();
+  const tgId   = getTgUserId();
+  const isAdmin = tgId !== null && ADMIN_TG_IDS.includes(tgId);
+
+  useEffect(() => { initTelegramApp(); }, []);
+
+  // Автологин через Telegram ID
+  useEffect(() => {
+    if (tgId && !linkedEmpId && data.employees.length > 0) {
+      const empId = getEmpIdByTgId(tgId);
+      if (empId && data.employees.find(e => e.id === empId)) {
+        setLinkedEmpId(empId);
+        onLinkedEmpChange(empId);
+        saveLinkedEmpId(empId);
+      }
+    }
+  }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
+
+  const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
+  const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
+  const deptCfg   = dept ? DEPARTMENT_CONFIG[dept] : null;
+
+  // Привязка — без каких-либо ограничений
+  const handleLinkEmployee = (id: string, name: string) => {
+    setLinkedEmpId(id);
+    onLinkedEmpChange(id);
+    saveLinkedEmpId(id);
+    if (tgId) { saveTgLink(tgId, id); syncTgLink(name, tgId); }
+    const displayName = tgUser ? getTgFullName(tgUser) : name;
+    setTgName(displayName);
+    localStorage.setItem(STORAGE_TG_NAME, displayName);
+    
+    // Автоматически сохранить Telegram username если он есть в Telegram профиле
+    if (tgUser?.username) {
+      console.log('[ProfileView] Auto-saving Telegram username:', tgUser.username);
+      saveEmpPrefs({
+        empId: id,
+        customUsername: tgUser.username, // Save from Telegram profile
+      });
+    }
+    
+    setIsLinking(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+
+
+  const headerGradient = dept
+    ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[dept]
+    : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
+
+  const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
+  const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
+  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
+
+  const SECTIONS: { id: ProfileSection; label: string; icon: string }[] = [
+    { id: 'reports',   label: 'Отчёты',     icon: '📊' },
+    { id: 'staff',     label: 'Сотрудники', icon: '👥' },
+    { id: 'settings',  label: 'Настройки',  icon: '⚙️' },
+    { id: 'bugreport', label: 'Баг-репорт', icon: '🐛' },
+  ];
+
+  // ── Экран привязки ──
+  if (!linkedEmp || isLinking) {
+    return (
+      <div className="space-y-4 pb-6">
+        {/* Шапка */}
+        <div className="rounded-3xl p-5 text-white shadow-lg" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
+          <div className="flex items-center gap-3 mb-3">
+            {tgUser?.photo_url ? (
+              <img src={tgUser.photo_url} alt="" className="w-14 h-14 rounded-2xl object-cover" />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-bold">
+                {tgUser ? (tgUser.first_name[0] + (tgUser.last_name?.[0] ?? '')).toUpperCase() : '👤'}
+              </div>
+            )}
+            <div>
+              <h2 className="font-bold text-lg leading-tight">
+                {tgUser ? getTgFullName(tgUser) : 'Мой профиль'}
+              </h2>
+              {tgUser?.username && <p className="text-white/60 text-sm">@{tgUser.username}</p>}
+              {tgId && <p className="text-white/40 text-xs">ID: {tgId}</p>}
+            </div>
+          </div>
+          <p className="text-white/70 text-sm">Найди себя в списке сотрудников чтобы начать</p>
+        </div>
+
+        {/* Поиск */}
+        <div className={`rounded-2xl p-4 shadow-sm border ${card}`}>
+          <h3 className={`font-bold text-sm mb-1 ${lbl}`}>🔍 Найди себя в графике</h3>
+          <p className={`text-xs mb-3 ${sub}`}>Введи своё имя или фамилию</p>
+          <input
+            type="text" value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              setSearchResults(findMatchingEmployees(data, e.target.value));
+            }}
+            placeholder="Иванов Иван..."
+            className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
+          />
+          {searchResults.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {searchResults.map(emp => {
+                const empDept = emp.department ? DEPARTMENT_CONFIG[emp.department] : null;
+                return (
+                  <button key={emp.id} onClick={() => handleLinkEmployee(emp.id, emp.name)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${isDark ? 'bg-slate-700 border-slate-600 hover:border-indigo-500' : 'bg-gray-50 border-gray-200 hover:border-indigo-300'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: emp.color }}>
+                      {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className={`font-semibold text-sm ${lbl}`}>{emp.name}</p>
+                      <p className={`text-xs ${sub}`}>{emp.role}</p>
+                    </div>
+                    {empDept && <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ color: empDept.color, backgroundColor: empDept.color + '20' }}>{empDept.icon} {empDept.label}</span>}
+                    <span className={`text-sm ${sub}`}>›</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {searchQuery.length > 1 && searchResults.length === 0 && (
+            <p className={`text-xs mt-3 text-center ${sub}`}>Никого не найдено. Проверь написание имени.</p>
+          )}
+        </div>
+
+        {/* Настройки доступны без привязки */}
+        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
+          <button
+            onClick={() => setActiveSection(activeSection === 'settings' ? 'staff' : 'settings')}
+            className={`w-full flex items-center justify-between px-4 py-3.5 ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>⚙️</div>
+              <span className={`font-semibold text-sm ${lbl}`}>Настройки</span>
+            </div>
+            <span className={`text-sm ${sub}`}>{activeSection === 'settings' ? '▲' : '▼'}</span>
+          </button>
+          {activeSection === 'settings' && (
+            <div className="px-4 pt-2">
+              <SettingsSection
+                sheetId={sheetId} sheetGid={sheetGid}
+                sheetsApiKey={sheetsApiKey}
+                appsScriptUrl={appsScriptUrl}
+                onSave={onSave} lastSync={lastSync}
+                isLoading={isLoading} onRefresh={onRefresh}
+                error={error} fakeDate={fakeDate}
+                onFakeDateChange={onFakeDateChange}
+                isAdmin={isAdmin}
+                linkedEmp={null}
+                tgUser={tgUser}
+                tgId={tgId}
+                onEmployeeUpdate={onEmployeeUpdate}
+              />
+            </div>
+          )}
+        </div>
+
+        {isLinking && linkedEmpId && (
+          <button onClick={() => setIsLinking(false)} className={`w-full py-3 rounded-2xl font-semibold text-sm border transition-all active:scale-95 ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'}`}>← Отмена</button>
+        )}
       </div>
     );
   }
 
   // ── Основной профиль ──
-  const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
-  const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
-  const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
   return (
     <div className="w-full space-y-4 pb-6">
-      {/* Шапка, навигация, контент секций — ...existing code... */}
-      {/* ...existing code... */}
-
-      {/* Блок отладки всегда видим (после секций) */}
-      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
-        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🐛 Отладка</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={async () => {
-              try {
-                const testKey = 'test_' + Math.random().toString(36).slice(2, 8);
-                const testValue = { test: true, time: Date.now() };
-                // @ts-ignore
-                const db = (await import('../utils/firebase')).db;
-                // @ts-ignore
-                const { setDoc, getDoc, deleteDoc, doc } = await import('firebase/firestore');
-                const ref = doc(db, 'debug', testKey);
-                await setDoc(ref, testValue);
-                const snap = await getDoc(ref);
-                await deleteDoc(ref);
-                if (snap.exists()) {
-                  alert('✅ Firebase тест: запись/чтение/удаление успешно. См. консоль для деталей.');
-                  console.log('[FirebaseTest] OK', { testKey, data: snap.data() });
-                } else {
-                  alert('❌ Firebase тест: не удалось прочитать данные.');
-                }
-              } catch (e) {
-                alert('❌ Firebase тест: ошибка. См. консоль.');
-                console.error('[FirebaseTest] Ошибка:', e);
-              }
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
-          >🔌 Тест Firebase</button>
-          <button
-            onClick={() => {
-              const tg = window.Telegram?.WebApp;
-              const confirm = tg
-                ? tg.showConfirm
-                : (msg: string, cb: (confirmed: boolean) => void) => cb(window.confirm(msg));
-              confirm('Вы уверены, что хотите полностью очистить все локальные данные?\n\nВас потребуется заново привязать профиль.', (confirmed: boolean) => {
-                if (!confirmed) return;
-                const keys = [
-                  'sf_linked_emp_id',
-                  'sf_tg_links',
-                  'sf_emp_prefs',
-                  'sf_admin_shift_edits',
-                  'sf_admin_emp_notes',
-                  'sf_admin_emp_rules',
-                  'ss_sheet_id',
-                  'ss_sheet_gid',
-                  'ss_sheets_api_key',
-                  'ss_apps_script_url',
-                  'sf_friends_ids',
-                  'sf_invite_codes',
-                  'sf_tg_name',
-                ];
-                keys.forEach(k => localStorage.removeItem(k));
-                if (tg && tg.showAlert) {
-                  tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
-                } else {
-                  alert('✅ Данные успешно очищены!\nСтраница будет перезагружена.');
-                  window.location.reload();
-                }
-              });
-            }}
-            className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-red-500 hover:bg-red-600 text-white"
-          >🧹 Очистить данные</button>
+      {/* Шапка */}
+      <div className="rounded-3xl overflow-hidden shadow-lg">
+        <div className="p-5 text-white" style={{ background: headerGradient }}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              {tgUser?.photo_url ? (
+                <div className="relative">
+                  <img src={tgUser.photo_url} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-white" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-extrabold shadow-inner">
+                  {linkedEmp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                </div>
+              )}
+              <div>
+                <h2 className="font-extrabold text-xl leading-tight">{tgName ?? linkedEmp.name}</h2>
+                {tgName && tgName !== linkedEmp.name && <p className="text-white/60 text-xs">{linkedEmp.name}</p>}
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {deptCfg && <span className="text-xs font-semibold bg-white/20 rounded-full px-2 py-0.5">{deptCfg.icon} {deptCfg.label}</span>}
+                  <span className="text-xs bg-white/10 rounded-full px-2 py-0.5">{linkedEmp.role}</span>
+                </div>
+              </div>
+            </div>
+            {isAdmin && <button onClick={() => setIsLinking(true)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-sm active:scale-95">✎</button>}
+          </div>
         </div>
-        <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
       </div>
+
+      {/* Навигация — горизонтальная сетка */}
+      <div className="grid grid-cols-4 gap-2">
+        {SECTIONS.map(sec => (
+          <button
+            key={sec.id}
+            onClick={() => setActiveSection(sec.id)}
+            className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all active:scale-95 ${
+              activeSection === sec.id
+                ? 'bg-indigo-500 border-indigo-500 shadow-md'
+                : isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100 shadow-sm'
+            }`}
+          >
+            <span className="text-xl">{sec.icon}</span>
+            <span className={`text-[10px] font-semibold text-center leading-tight ${
+              activeSection === sec.id ? 'text-white' : isDark ? 'text-slate-300' : 'text-gray-600'
+            }`}>{sec.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Контент */}
+      {activeSection === 'reports' && (
+        <ReportsSection data={data} linkedEmpId={linkedEmpId} />
+      )}
+
+      {activeSection === 'staff' && (
+        <StaffSection data={data} today={today} month={month} year={year} linkedEmpId={linkedEmpId} />
+      )}
+
+      {activeSection === 'settings' && (
+        <SettingsSection
+          sheetId={sheetId} sheetGid={sheetGid}
+          sheetsApiKey={sheetsApiKey}
+          appsScriptUrl={appsScriptUrl}
+          onSave={onSave} lastSync={lastSync}
+          isLoading={isLoading} onRefresh={onRefresh}
+          error={error} fakeDate={fakeDate}
+          onFakeDateChange={onFakeDateChange}
+          isAdmin={isAdmin}
+          onOpenAdminPanel={() => setShowAdminPanel(true)}
+          linkedEmp={linkedEmp}
+          tgUser={tgUser}
+          tgId={tgId}
+          onEmployeeUpdate={onEmployeeUpdate}
+        />
+      )}
+
+      {showAdminPanel && (
+        <AdminPanel
+          data={data}
+          onClose={() => setShowAdminPanel(false)}
+          lastSync={lastSync}
+          isLoading={isLoading}
+          error={error}
+          onRefresh={onRefresh}
+          onEmployeeUpdate={onEmployeeUpdate}
+        />
+      )}
+
+      {activeSection === 'bugreport' && (
+        <div className={`rounded-2xl p-5 border shadow-sm ${card}`}>
+          <div className="text-center mb-5">
+            <p className="text-4xl mb-2">🐛</p>
+            <p className={`font-bold text-base mb-1 ${lbl}`}>Обратная связь</p>
+            <p className={`text-sm ${sub}`}>Нашёл ошибку или есть идея? Напиши нам!</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <a
+              href="https://t.me/silaysilaysilay"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 transition-colors"
+            >
+              <span className="text-2xl">🐞</span>
+              <div className="flex-1 text-left">
+                <p className="text-white font-semibold text-sm">Баги и ошибки</p>
+                <p className="text-red-100 text-xs">@silaysilaysilay</p>
+              </div>
+              <span className="text-white text-lg">→</span>
+            </a>
+            <a
+              href="https://t.me/milkaaasss"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-4 py-3.5 rounded-xl bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700 transition-colors"
+            >
+              <span className="text-2xl">💡</span>
+              <div className="flex-1 text-left">
+                <p className="text-white font-semibold text-sm">Идеи и предложения</p>
+                <p className="text-indigo-100 text-xs">@milkaaasss</p>
+              </div>
+              <span className="text-white text-lg">→</span>
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
+};

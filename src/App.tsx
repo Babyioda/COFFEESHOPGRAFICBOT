@@ -396,14 +396,15 @@ function AppInner() {
       <nav className={`fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md backdrop-blur-md border-t z-30 shadow-lg ${bgBottom}`}>
         <div className="flex">
           {TABS.map(tab => {
-            const isLocked = tab.id === 'shifts' && !linkedEmpId;
+            // Вкладка смены теперь всегда доступна
+            const isLocked = false;
             const isActive = effectiveTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => !isLocked && setActiveTab(tab.id)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 flex flex-col items-center py-2 gap-0.5 transition-all relative ${
-                  isLocked ? 'opacity-30' : 'active:scale-95'
+                  'active:scale-95'
                 } ${isActive ? 'text-indigo-500' : isDark ? 'text-slate-500' : 'text-gray-400'}`}
               >
                 <span className="text-lg leading-none">{tab.icon}</span>
