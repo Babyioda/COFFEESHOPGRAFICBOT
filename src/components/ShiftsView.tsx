@@ -9,7 +9,7 @@ import {
   getEmpNote, loadShiftEdits, loadEmpNotes,
   getEmpRule,
 } from '../utils/adminEdits';
-import { fetchEmployeeNotes, fetchShiftNotes, watchEmployeeNotes, watchShiftNotes, watchEmpNotes, watchEmpRules, watchEmpPrefs } from '../utils/firebase';
+import { fetchEmployeeNotes, fetchShiftNotes, watchEmployeeNotes, watchShiftNotes, watchAllShiftNotes, watchEmpNotes, watchEmpRules, watchEmpPrefs, setShiftEdit, deleteShiftEditDoc, fetchShiftEdits } from '../utils/firebase';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS_RU_FULL = [
@@ -259,52 +259,109 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
   const [editKey, setEditKey] = useState(0);
   const [editingShift, setEditingShift] = useState<{ emp: Employee; shift: ShiftType } | null>(null);
 
-  // Загружаем актуальные правки
-  const shiftEdits = loadShiftEdits();
-  // const empNotes   = loadEmpNotes(); // больше не нужно, используем fsEmpNotes
-
+  // Real-time Firebase listeners
   const [fsEmpNotes, setFsEmpNotes] = useState<Record<string,string>>({});
   const [fsShiftNotes, setFsShiftNotes] = useState<Record<string,string>>({});
+  const [fsShiftEdits, setFsShiftEdits] = useState<Record<string,any>>({});
+  const [fsEmpRules, setFsEmpRules] = useState<Record<string,any>>({});
 
   useEffect(() => {
     let mounted = true;
-    // Реалтайм слушатели для заметок по сотрудникам и сменам
-    const unsubEmpNotes: Array<() => void> = [];
-    const unsubShiftNotes: Array<() => void> = [];
-    const empMap: Record<string,string> = {};
-    const shiftMap: Record<string,string> = {};
-    data.employees.forEach(emp => {
-      // Слушатель для employee_notes
-      const unsubEmp = watchEmployeeNotes(emp.id, (notes) => {
-        if (!mounted) return;
-        empMap[emp.id] = notes[0]?.text || '';
-        setFsEmpNotes(prev => ({ ...prev, [emp.id]: empMap[emp.id] }));
+    console.log('[DayModal] Setting up Firebase listeners');
+    const unsubscribers: (() => void)[] = [];
+
+    // Listen to all shift edits
+    const unsubShiftEdits = watchShiftEdits((edits: any[]) => {
+      if (!mounted) return;
+      const editMap: Record<string, any> = {};
+      edits.forEach(edit => {
+        editMap[edit.empId] = edit;
       });
-      unsubEmpNotes.push(unsubEmp);
-      // Слушатель для shift_notes
-      const shiftId = `${emp.id}-${dateStr}`;
-      const unsubShift = watchShiftNotes(shiftId, (notes) => {
-        if (!mounted) return;
-        shiftMap[emp.id] = notes[0]?.text || '';
-        setFsShiftNotes(prev => ({ ...prev, [emp.id]: shiftMap[emp.id] }));
-      });
-      unsubShiftNotes.push(unsubShift);
+      console.log('[DayModal] Shift edits updated:', editMap);
+      setFsShiftEdits(editMap);
     });
+    unsubscribers.push(unsubShiftEdits);
+
+    // Listen to all emp rules
+    const unsubEmpRules = watchEmpRules((rules: any[]) => {
+      if (!mounted) return;
+      const ruleMap: Record<string, any> = {};
+      rules.forEach(rule => {
+        ruleMap[rule.empId] = rule;
+      });
+      console.log('[DayModal] Emp rules updated:', ruleMap);
+      setFsEmpRules(ruleMap);
+    });
+    unsubscribers.push(unsubEmpRules);
+
+    // Listen to all emp notes
+    const unsubEmpNotes = watchEmpNotes((notes: any[]) => {
+      if (!mounted) return;
+      const noteMap: Record<string, string> = {};
+      notes.forEach(note => {
+        noteMap[note.empId] = note.note || '';
+      });
+      console.log('[DayModal] Emp notes updated:', noteMap);
+      setFsEmpNotes(noteMap);
+    });
+    unsubscribers.push(unsubEmpNotes);
+
+    // Listen to all shift notes
+    const unsubShiftNotes = watchAllShiftNotes((notes: any[]) => {
+      if (!mounted) return;
+      const noteMap: Record<string, string> = {};
+      notes.forEach(note => {
+        // shift_notes docs may have structure: { id: "...", shiftId: "..." } or { empId: "...", date: "..." }
+        // We'll map by shiftId or by empId-date if available
+        const key = note.shiftId || `${note.empId}-${note.date}`;
+        noteMap[key] = note.note || '';
+      });
+      console.log('[DayModal] Shift notes updated:', noteMap);
+      setFsShiftNotes(noteMap);
+    });
+    unsubscribers.push(unsubShiftNotes);
+
     return () => {
       mounted = false;
-      unsubEmpNotes.forEach(fn => fn && fn());
-      unsubShiftNotes.forEach(fn => fn && fn());
+      console.log('[DayModal] Cleaning up Firebase listeners');
+      unsubscribers.forEach(unsub => {
+        try { unsub?.(); } catch (err) { console.error('[DayModal] Error unsubscribing:', err); }
+      });
     };
-  }, [data.employees, dateStr]);
+  }, []);
 
   const getCustomTimes = (empId: string) => {
-    return shiftEdits.find(e => e.empId === empId && e.date === dateStr);
+    // Try Firebase first, then localStorage as fallback
+    const fbEdit = fsShiftEdits[empId];
+    if (fbEdit) {
+      return {
+        customStart: fbEdit.customStart,
+        customEnd: fbEdit.customEnd,
+        note: fbEdit.note,
+      };
+    }
+    // Fallback to localStorage
+    const localEdit = getShiftEdit(empId, dateStr);
+    return localEdit ? {
+      customStart: localEdit.customStart,
+      customEnd: localEdit.customEnd,
+      note: localEdit.note,
+    } : undefined;
   };
   const getNote = (empId: string) => {
-    return fsEmpNotes[empId] ?? '';
+    // Prefer Firebase (emp_notes) over shift edits notes
+    return fsEmpNotes[empId] ?? fsShiftEdits[empId]?.note ?? '';
   };
-  const getShiftNote = (empId: string) => {
-    return fsShiftNotes[empId] ?? shiftEdits.find(e => e.empId === empId && e.date === dateStr)?.note ?? '';
+  const getShiftNote = (empId: string, dateStr: string) => {
+    // Try Firebase shift_notes first (stored as { shiftId: "empId-date", text: "..." })
+    const fbShiftNote = fsShiftNotes[`${empId}-${dateStr}`];
+    if (fbShiftNote) return fbShiftNote;
+    
+    // Fallback to shift edit note
+    const fbEdit = fsShiftEdits[empId];
+    if (fbEdit?.note) return fbEdit.note;
+    
+    return '';
   };
 
   const working: {
@@ -433,7 +490,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                           {sg.map((w, i) => {
                             const custom    = getCustomTimes(w.emp.id);
                             const empNote   = getNote(w.emp.id);
-                            const shiftNote = getShiftNote(w.emp.id);
+                            const shiftNote = getShiftNote(w.emp.id, dateStr, dateStr);
                             const timeStart = custom?.customStart ?? SHIFT_TIMES[w.shift]?.start;
                             const timeEnd   = custom?.customEnd   ?? SHIFT_TIMES[w.shift]?.end;
                             const hasCustomTime = custom?.customStart || custom?.customEnd;
@@ -507,7 +564,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                       <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-gray-50'}`}>
                         {group.filter(w => w.birthday && w.shift === 'off' && !w.hours).map((w, i) => {
                           const empNote = getNote(w.emp.id);
-                          const shiftNote = getShiftNote(w.emp.id);
+                          const shiftNote = getShiftNote(w.emp.id, dateStr);
                           return (
                             <div key={i} className={`flex items-start gap-3 px-4 py-2.5 ${w.isMe ? isDark ? 'bg-indigo-900/30' : 'bg-indigo-50' : ''}`}>
                               <div
@@ -564,7 +621,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                         {group.filter(w => w.shift === 'off' && w.hours).map((w, i) => {
                           const workedHours = w.hours;
                           const empNote = getNote(w.emp.id);
-                          const shiftNote = getShiftNote(w.emp.id);
+                          const shiftNote = getShiftNote(w.emp.id, dateStr);
                           return (
                             <div key={i} className={`flex items-start gap-3 px-4 py-2.5 ${w.isMe ? isDark ? 'bg-indigo-900/30' : 'bg-indigo-50' : ''}`}>
                               <div

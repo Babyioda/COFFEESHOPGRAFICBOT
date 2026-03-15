@@ -37,25 +37,34 @@ export function loadShiftEdits(): ShiftEdit[] {
 import { addShiftNote, addEmployeeNote, setShiftEdit, setEmpNote, setEmpRule, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
 
 export function saveShiftEdit(edit: ShiftEdit): void {
-  const all = loadShiftEdits();
-  const idx = all.findIndex(e => e.empId === edit.empId && e.date === edit.date);
-  if (idx >= 0) all[idx] = edit;
-  else all.push(edit);
-  localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
-  console.log('[AdminEdits] Shift edit saved:', { empId: edit.empId, date: edit.date });
-  // Синхронизировать с Apps Script
-  syncShiftEditToServer(edit);
-  // Sync to Firebase (best-effort)
+  console.log('[AdminEdits] Saving shift edit to Firebase:', { empId: edit.empId, date: edit.date });
+  
+  // Save to Firebase first (primary source)
   setShiftEdit({
     empId: edit.empId,
     date: edit.date,
     customStart: edit.customStart,
     customEnd: edit.customEnd,
     note: edit.note,
+  }).then(() => {
+    console.log('[AdminEdits] Shift edit saved to Firebase successfully');
   }).catch((err) => {
-    console.error('[AdminEdits] Failed to sync shift edit to Firebase:', err);
+    console.error('[AdminEdits] Failed to save shift edit to Firebase:', err);
+    // Fallback to localStorage as emergency backup
+    const all = loadShiftEdits();
+    const idx = all.findIndex(e => e.empId === edit.empId && e.date === edit.date);
+    if (idx >= 0) all[idx] = edit;
+    else all.push(edit);
+    localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
+    console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
   });
-  // Also persist note to Firestore (best-effort)
+  
+  // Синхронизировать с Apps Script as async task
+  syncShiftEditToServer(edit).catch(err => {
+    console.error('[AdminEdits] Apps Script sync failed:', err);
+  });
+  
+  // Also persist note to Firestore shift_notes if provided
   if (edit.note && edit.note.trim()) {
     addShiftNote(`${edit.empId}-${edit.date}`, edit.note).catch((err) => {
       console.error('[AdminEdits] Failed to sync shift note to Firebase:', err);
@@ -64,19 +73,28 @@ export function saveShiftEdit(edit: ShiftEdit): void {
 }
 
 export function deleteShiftEdit(empId: string, date: string): void {
-  const all = loadShiftEdits().filter(e => !(e.empId === empId && e.date === date));
-  localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
-  // Синхронизировать удаление
-  syncShiftDeleteToServer(empId, date);
-  // Sync deletion to Firebase (best-effort)
+  console.log('[AdminEdits] Deleting shift edit:', { empId, date });
+  
+  // Delete from Firebase first (primary)
   setShiftEdit({
     empId,
     date,
     customStart: undefined,
     customEnd: undefined,
     note: undefined,
+  }).then(() => {
+    console.log('[AdminEdits] Shift edit deleted from Firebase successfully');
   }).catch((err) => {
-    console.error('[AdminEdits] Failed to sync shift edit removal to Firebase:', err);
+    console.error('[AdminEdits] Failed to delete shift edit from Firebase:', err);
+    // Fallback to localStorage
+    const all = loadShiftEdits().filter(e => !(e.empId === empId && e.date === date));
+    localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
+    console.warn('[AdminEdits] Deleted from localStorage as emergency backup (Firebase down?)');
+  });
+  
+  // Sync deletion to Apps Script as async task
+  syncShiftDeleteToServer(empId, date).catch(err => {
+    console.error('[AdminEdits] Apps Script delete sync failed:', err);
   });
 }
 
@@ -92,36 +110,32 @@ export function loadEmpNotes(): EmpNote[] {
 }
 
 export function saveEmpNote(empId: string, note: string): void {
-  const all = loadEmpNotes();
-  const idx = all.findIndex(e => e.empId === empId);
-  if (note.trim() === '') {
-    // Удаляем если пустое
-    const filtered = all.filter(e => e.empId !== empId);
-    localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(filtered));
-    console.log('[AdminEdits] Employee note cleared:', empId);
-    syncEmpNoteToServer(empId, '');
-    // Sync to Firebase (best-effort)
-    setEmpNote(empId, '').catch((err) => {
-      console.error('[AdminEdits] Failed to sync employee note to Firebase:', err);
-    });
-    return;
-  }
-  if (idx >= 0) all[idx].note = note;
-  else all.push({ empId, note });
-  localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(all));
-  console.log('[AdminEdits] Employee note saved:', { empId, length: note.length });
-  // Синхронизировать с Apps Script
-  syncEmpNoteToServer(empId, note);
-  // Sync to Firebase (best-effort)
-  setEmpNote(empId, note).catch((err) => {
-    console.error('[AdminEdits] Failed to sync employee note to Firebase:', err);
+  const finalNote = note.trim();
+  console.log('[AdminEdits] Saving employee note to Firebase:', { empId, length: finalNote.length });
+  
+  // Save to Firebase first (primary source)
+  setEmpNote(empId, finalNote).then(() => {
+    console.log('[AdminEdits] Employee note saved to Firebase successfully');
+  }).catch((err) => {
+    console.error('[AdminEdits] Failed to save employee note to Firebase:', err);
+    // Fallback to localStorage as emergency backup
+    const all = loadEmpNotes();
+    const idx = all.findIndex(e => e.empId === empId);
+    if (finalNote === '') {
+      const filtered = all.filter(e => e.empId !== empId);
+      localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(filtered));
+    } else {
+      if (idx >= 0) all[idx].note = finalNote;
+      else all.push({ empId, note: finalNote });
+      localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(all));
+    }
+    console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
   });
-  // Also persist employee note to Firestore (best-effort)
-  if (note && note.trim()) {
-    addEmployeeNote(empId, note).catch((err) => {
-      console.error('[AdminEdits] Failed to sync employee note to Firebase:', err);
-    });
-  }
+  
+  // Синхронизировать с Apps Script as async task
+  syncEmpNoteToServer(empId, finalNote).catch(err => {
+    console.error('[AdminEdits] Apps Script sync failed:', err);
+  });
 }
 
 export function getEmpNote(empId: string): string {
@@ -136,28 +150,26 @@ export function loadEmpRules(): EmpRule[] {
 }
 
 export function saveEmpRule(empId: string, hours: { start: string; end: string }): void {
-  const all = loadEmpRules();
-  const idx = all.findIndex(e => e.empId === empId);
+  console.log('[AdminEdits] Saving employee rule to Firebase:', { empId, start: hours.start, end: hours.end });
   
-  if (hours.start === '' || hours.end === '') {
-    // Удаляем если пусто
-    const filtered = all.filter(e => e.empId !== empId);
-    localStorage.setItem(STORAGE_EMP_RULES, JSON.stringify(filtered));
-    console.log('[AdminEdits] Employee rule cleared:', empId);
-    // Sync to Firebase (best-effort)
-    setEmpRule(empId, hours).catch((err) => {
-      console.error('[AdminEdits] Failed to sync employee rule to Firebase:', err);
-    });
-    return;
-  }
-  
-  if (idx >= 0) all[idx].hours = hours;
-  else all.push({ empId, hours });
-  localStorage.setItem(STORAGE_EMP_RULES, JSON.stringify(all));
-  console.log('[AdminEdits] Employee rule saved:', { empId, start: hours.start, end: hours.end });
-  // Sync to Firebase (best-effort)
-  setEmpRule(empId, hours).catch((err) => {
-    console.error('[AdminEdits] Failed to sync employee rule to Firebase:', err);
+  // Save to Firebase first (primary source)
+  setEmpRule(empId, hours).then(() => {
+    console.log('[AdminEdits] Employee rule saved to Firebase successfully');
+  }).catch((err) => {
+    console.error('[AdminEdits] Failed to save employee rule to Firebase:', err);
+    // Fallback to localStorage as emergency backup
+    const all = loadEmpRules();
+    const idx = all.findIndex(e => e.empId === empId);
+    
+    if (hours.start === '' || hours.end === '') {
+      const filtered = all.filter(e => e.empId !== empId);
+      localStorage.setItem(STORAGE_EMP_RULES, JSON.stringify(filtered));
+    } else {
+      if (idx >= 0) all[idx].hours = hours;
+      else all.push({ empId, hours });
+      localStorage.setItem(STORAGE_EMP_RULES, JSON.stringify(all));
+    }
+    console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
   });
 }
 
@@ -181,19 +193,25 @@ export function loadEmpPrefs(): EmpPrefs[] {
 }
 
 export function saveEmpPrefs(pref: EmpPrefs): void {
-  const all = loadEmpPrefs();
-  const idx = all.findIndex(e => e.empId === pref.empId);
-  if (idx >= 0) all[idx] = { ...all[idx], ...pref };
-  else all.push(pref);
-  localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
-  console.log('[AdminEdits] Employee prefs saved:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday });
-  // Sync to Firebase (best-effort)
+  console.log('[AdminEdits] Saving employee prefs to Firebase:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday, customUsername: pref.customUsername });
+  
+  // Save to Firebase first (primary source)
   setEmpPrefs({
     empId: pref.empId,
     showTelegram: pref.showTelegram,
     birthday: pref.birthday,
+    customUsername: pref.customUsername,
+  }).then(() => {
+    console.log('[AdminEdits] Employee prefs saved to Firebase successfully');
   }).catch((err) => {
-    console.error('[AdminEdits] Failed to sync employee prefs to Firebase:', err);
+    console.error('[AdminEdits] Failed to save employee prefs to Firebase:', err);
+    // Fallback to localStorage as emergency backup
+    const all = loadEmpPrefs();
+    const idx = all.findIndex(e => e.empId === pref.empId);
+    if (idx >= 0) all[idx] = { ...all[idx], ...pref };
+    else all.push(pref);
+    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
+    console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
   });
 }
 
@@ -206,24 +224,38 @@ const STORAGE_LINKED_ID = 'sf_linked_emp_id';
 
 export function saveLinkedEmpId(empId: string | null): void {
   if (!empId) {
-    localStorage.removeItem(STORAGE_LINKED_ID);
-    console.log('[AdminEdits] Linked employee cleared');
+    console.log('[AdminEdits] Clearing linked employee');
     const uid = getCurrentUid();
     if (uid) {
-      deleteUserLink(uid).catch((err) => {
+      // Remove from Firebase first (primary)
+      deleteUserLink(uid).then(() => {
+        console.log('[AdminEdits] User link cleared from Firebase');
+      }).catch((err) => {
         console.error('[AdminEdits] Failed to clear user link in Firebase:', err);
+      }).finally(() => {
+        // Then clear localStorage as fallback
+        localStorage.removeItem(STORAGE_LINKED_ID);
       });
+    } else {
+      localStorage.removeItem(STORAGE_LINKED_ID);
     }
     return;
   }
-  localStorage.setItem(STORAGE_LINKED_ID, empId);
-  console.log('[AdminEdits] Linked employee saved:', empId);
-  // Sync to Firebase (best-effort)
+  console.log('[AdminEdits] Saving linked employee:', empId);
   const uid = getCurrentUid();
   if (uid) {
-    setUserLink(uid, empId).catch((err) => {
+    // Save to Firebase first (primary)
+    setUserLink(uid, empId).then(() => {
+      console.log('[AdminEdits] User link saved to Firebase successfully');
+    }).catch((err) => {
       console.error('[AdminEdits] Failed to sync user link to Firebase:', err);
+      // Fallback to localStorage
+      localStorage.setItem(STORAGE_LINKED_ID, empId);
+      console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
     });
+  } else {
+    // No UID, just save to localStorage
+    localStorage.setItem(STORAGE_LINKED_ID, empId);
   }
 }
 

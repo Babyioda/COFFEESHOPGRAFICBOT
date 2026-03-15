@@ -3,19 +3,9 @@ import {
   ScheduleData, ShiftType, SHIFT_CONFIG,
   DEPARTMENT_CONFIG, getDepartment, Employee,
 } from '../types/schedule';
-import { getEmpPrefs } from '../utils/adminEdits';
+import { getEmpPrefs, getEmpNote, saveEmpNote } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
-const STORAGE_EMP_NOTES = 'sf_admin_emp_notes';
-function loadEmpNotes(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(STORAGE_EMP_NOTES) || '{}'); } catch { return {}; }
-}
-function saveEmpNote(empId: string, note: string) {
-  const notes = loadEmpNotes();
-  if (note.trim()) notes[empId] = note.trim();
-  else delete notes[empId];
-  localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(notes));
-}
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -57,8 +47,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const [cardMonth, setCardMonth] = useState(month);
   const [cardYear, setCardYear]   = useState(year);
   const [showNoteEditor, setShowNoteEditor] = useState(false);
-  const [noteText, setNoteText] = useState(() => loadEmpNotes()[emp.id] || '');
-  const [savedNote, setSavedNote] = useState(() => loadEmpNotes()[emp.id] || '');
+  const [noteText, setNoteText] = useState(() => getEmpNote(emp.id) || '');
+  const [savedNote, setSavedNote] = useState(() => getEmpNote(emp.id) || '');
 
   const dept    = emp.department ?? getDepartment(emp.role);
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;

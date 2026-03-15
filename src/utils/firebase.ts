@@ -238,6 +238,30 @@ export function watchShiftNotes(shiftId: string, cb: (items: any[]) => void) {
   }
 }
 
+export function watchAllShiftNotes(cb: (items: any[]) => void) {
+  try {
+    const q = query(collection(db, 'shift_notes'));
+    return onSnapshot(q, (snap: any) => {
+      const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          note: data.text || data.note || '', // Map 'text' field to 'note' for consistency
+        };
+      });
+      console.log(`[Firebase] Watch: ${notes.length} total shift notes`);
+      cb(notes);
+    }, (err: any) => {
+      console.error('[Firebase] Watch error for all shift notes:', err);
+      cb([]); // Graceful fallback
+    });
+  } catch (err) {
+    console.error('[Firebase] Failed to set up watch for all shift notes:', err);
+    return () => {};
+  }
+}
+
 // Employee notes
 export async function addEmployeeNote(employeeId: string, text: string, authorId?: string) {
   try {
@@ -428,13 +452,23 @@ export async function deleteShiftEditDoc(empId: string, date: string): Promise<v
   }
 }
 
-export async function fetchShiftEdits(): Promise<ShiftEditDoc[]> {
+// Реалтайм слушатель для правок смен (shift_edits) - теперь используется для live sync
+export function watchShiftEdits(cb: (items: ShiftEditDoc[]) => void) {
   try {
-    const snap = await getDocs(collection(db, 'shift_edits'));
-    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as ShiftEditDoc));
+    return onSnapshot(collection(db, 'shift_edits'), (snap: any) => {
+      const edits = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as ShiftEditDoc));
+      console.log('[Firebase] Watch shift_edits updated:', edits.length, 'items');
+      cb(edits);
+    }, (err: any) => {
+      console.error('[Firebase] Watch error for shift_edits:', err.code, err.message);
+      if (err.code === 'permission-denied') {
+        console.error('[Firebase] PERMISSION DENIED: shift_edits collection needs read access.');
+      }
+      cb([]); // Return empty array on error
+    });
   } catch (err) {
-    console.error('[Firebase] Failed to fetch shift edits:', err);
-    return [];
+    console.error('[Firebase] Failed to set up watch for shift_edits:', err);
+    return () => {};
   }
 }
 
@@ -512,11 +546,12 @@ export async function fetchEmpRules(): Promise<EmpRuleDoc[]> {
   }
 }
 
-// ======== Employee Preferences (Telegram visibility + Birthday) ========
+// ======== Employee Preferences (Telegram visibility + Birthday + Username) ========
 export interface EmpPrefsDoc {
   empId: string;
   showTelegram?: boolean;
   birthday?: string; // MM-DD
+  customUsername?: string; // Manually entered @username
   updatedAt?: any;
 }
 

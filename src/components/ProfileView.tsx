@@ -88,6 +88,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   useEffect(() => {
     if (!linkedEmp) return;
     setPrefsLoaded(false);
+    console.log('[ProfileView] Setting up Firebase listeners for:', linkedEmp.id);
     const unsubscribers: (() => void)[] = [];
     
     try {
@@ -95,6 +96,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       const unsubPrefs = watchEmpPrefs((allPrefs) => {
         try {
           const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
+          console.log('[ProfileView] Firebase prefs updated:', { empId: linkedEmp.id, prefs: p });
           setShowTelegramPref(!!p.showTelegram);
           if (p.birthday) {
             setBirthdayInput(`2000-${p.birthday}`);
@@ -102,6 +104,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             setBirthdayInput('');
           }
           if (p.customUsername) {
+            console.log('[ProfileView] Loaded customUsername from Firebase:', p.customUsername);
             setManualUsername(p.customUsername);
           } else {
             setManualUsername('');
@@ -119,6 +122,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         try {
           const rule = allRules.find(r => r.empId === linkedEmp.id);
           if (rule && rule.hours) {
+            console.log('[ProfileView] Rules updated for:', linkedEmp.id);
             // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
             // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
           }
@@ -133,6 +137,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         try {
           const note = allNotes.find(n => n.empId === linkedEmp.id);
           if (note) {
+            console.log('[ProfileView] Notes updated for:', linkedEmp.id);
             // Можно добавить setNoteText(note.note) если нужно live-отображение
           }
         } catch (err) {
@@ -146,6 +151,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     }
 
     return () => {
+      console.log('[ProfileView] Cleaning up Firebase listeners for:', linkedEmp.id);
       unsubscribers.forEach(unsub => {
         try { unsub?.(); } catch (err) { console.error('[ProfileView] Error unsubscribing:', err); }
       });
@@ -373,32 +379,53 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
               <p className="text-[10px] text-gray-500">Год игнорируется</p>
             </div>
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (!linkedEmp) return;
-                const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
-                // Allow saving birthday regardless of Telegram settings
-                // Check if Telegram is enabled and if we have a username (either from TG or manually entered)
-                const hasUsername = linkedEmp.tgUsername || manualUsername;
-                if (showTelegramPref && !hasUsername) {
-                  alert('⚠️ Для включения Telegram нужен @username. Можете найти его в параметрах профиля Telegram или добавить вручную.');
-                  return;
+                try {
+                  const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
+                  // Check if Telegram is enabled and if we have a username (either from TG or manually entered)
+                  const hasUsername = linkedEmp.tgUsername || manualUsername;
+                  if (showTelegramPref && !hasUsername) {
+                    console.warn('[ProfileView] Cannot enable Telegram: no username provided');
+                    // Let user correct it - don't return, just show warning
+                    // They can still save birthday
+                    if (manualUsername === '' && !linkedEmp.tgUsername) {
+                      alert('⚠️ Telegram включен но нет @username. Найдите его в параметрах профиля Telegram или добавьте вручную.');
+                      return;
+                    }
+                  }
+                  
+                  console.log('[ProfileView] Saving employee prefs...', { 
+                    empId: linkedEmp.id, 
+                    showTelegram: showTelegramPref, 
+                    birthday: mmdd,
+                    customUsername: manualUsername || undefined
+                  });
+                  
+                  // Save to both localStorage and Firebase
+                  saveEmpPrefs({ 
+                    empId: linkedEmp.id, 
+                    showTelegram: showTelegramPref, 
+                    birthday: mmdd,
+                    customUsername: manualUsername || undefined,
+                  });
+                  
+                  // Update object for immediate effect
+                  linkedEmp.showTelegram = showTelegramPref;
+                  linkedEmp.birthday = mmdd;
+                  if (updateEmployee) {
+                    updateEmployee({...linkedEmp});
+                  }
+                  
+                  console.log('[ProfileView] Employee prefs saved successfully');
+                  alert('✅ Настройки сохранены');
+                } catch (err) {
+                  console.error('[ProfileView] Error saving prefs:', err);
+                  alert('❌ Ошибка при сохранении: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                  // State remains intact - user can retry
                 }
-                saveEmpPrefs({ 
-                  empId: linkedEmp.id, 
-                  showTelegram: showTelegramPref, 
-                  birthday: mmdd,
-                  customUsername: manualUsername || undefined,
-                });
-                // update object for immediate effect
-                linkedEmp.showTelegram = showTelegramPref;
-                linkedEmp.birthday = mmdd;
-                if (updateEmployee) {
-                  // propagate updated employee back to parent
-                  updateEmployee({...linkedEmp});
-                }
-                alert('Настройки сохранены');
               }}
-              className="w-full py-2 rounded-xl bg-indigo-500 text-white text-sm"
+              className="w-full py-2 rounded-xl bg-indigo-500 text-white text-sm active:scale-95 transition-all"
             >Сохранить</button>
           </div>
         </div>
@@ -1046,6 +1073,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const displayName = tgUser ? getTgFullName(tgUser) : name;
     setTgName(displayName);
     localStorage.setItem(STORAGE_TG_NAME, displayName);
+    
+    // Автоматически сохранить Telegram username если он есть в Telegram профиле
+    if (tgUser?.username) {
+      console.log('[ProfileView] Auto-saving Telegram username:', tgUser.username);
+      saveEmpPrefs({
+        empId: id,
+        customUsername: tgUser.username, // Save from Telegram profile
+      });
+    }
+    
     setIsLinking(false);
     setSearchQuery('');
     setSearchResults([]);
