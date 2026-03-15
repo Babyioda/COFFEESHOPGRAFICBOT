@@ -4,12 +4,8 @@ import {
   DEPARTMENT_CONFIG, Department, getDepartment, Employee,
 } from '../types/schedule';
 import { useTheme } from '../context/ThemeContext';
-import {
-  getShiftEdit, saveShiftEdit, deleteShiftEdit,
-  getEmpNote, loadShiftEdits, loadEmpNotes,
-  getEmpRule,
-} from '../utils/adminEdits';
-import { fetchEmployeeNotes, fetchShiftNotes, watchEmployeeNotes, watchShiftNotes, watchAllShiftNotes, watchEmpNotes, watchEmpRules, watchEmpPrefs, setShiftEdit, deleteShiftEditDoc, fetchShiftEdits } from '../utils/firebase';
+import { getShiftEdit, saveShiftEdit, deleteShiftEdit, getEmpRule } from '../utils/adminEdits';
+import { watchAllShiftNotes, watchEmpNotes, watchEmpRules, watchShiftEdits } from '../utils/firebase';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS_RU_FULL = [
@@ -263,12 +259,13 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
   const [fsEmpNotes, setFsEmpNotes] = useState<Record<string,string>>({});
   const [fsShiftNotes, setFsShiftNotes] = useState<Record<string,string>>({});
   const [fsShiftEdits, setFsShiftEdits] = useState<Record<string,any>>({});
-  const [fsEmpRules, setFsEmpRules] = useState<Record<string,any>>({});
+  // const [fsEmpRules, setFsEmpRules] = useState<Record<string,any>>({});
 
   useEffect(() => {
     let mounted = true;
     console.log('[DayModal] Setting up Firebase listeners');
     const unsubscribers: (() => void)[] = [];
+
 
     // Listen to all shift edits
     const unsubShiftEdits = watchShiftEdits((edits: any[]) => {
@@ -281,18 +278,6 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
       setFsShiftEdits(editMap);
     });
     unsubscribers.push(unsubShiftEdits);
-
-    // Listen to all emp rules
-    const unsubEmpRules = watchEmpRules((rules: any[]) => {
-      if (!mounted) return;
-      const ruleMap: Record<string, any> = {};
-      rules.forEach(rule => {
-        ruleMap[rule.empId] = rule;
-      });
-      console.log('[DayModal] Emp rules updated:', ruleMap);
-      setFsEmpRules(ruleMap);
-    });
-    unsubscribers.push(unsubEmpRules);
 
     // Listen to all emp notes
     const unsubEmpNotes = watchEmpNotes((notes: any[]) => {
@@ -490,7 +475,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                           {sg.map((w, i) => {
                             const custom    = getCustomTimes(w.emp.id);
                             const empNote   = getNote(w.emp.id);
-                            const shiftNote = getShiftNote(w.emp.id, dateStr, dateStr);
+                            const shiftNote = getShiftNote(w.emp.id, dateStr);
                             const timeStart = custom?.customStart ?? SHIFT_TIMES[w.shift]?.start;
                             const timeEnd   = custom?.customEnd   ?? SHIFT_TIMES[w.shift]?.end;
                             const hasCustomTime = custom?.customStart || custom?.customEnd;
@@ -1003,9 +988,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
             const myRule      = linkedEmp ? getEmpRule(linkedEmp.id) : null;
             
-            let myTimeStart = myCustom?.customStart ?? myRule?.hours.start ?? myTimes?.start;
-            let myTimeEnd   = myCustom?.customEnd   ?? myRule?.hours.end   ?? myTimes?.end;
-            const isCustomTime = !!myCustom || !!myRule;
+            let myTimeStart = myCustom?.customStart ?? myRule?.start ?? myTimes?.start;
+            let myTimeEnd   = myCustom?.customEnd   ?? myRule?.end   ?? myTimes?.end;
+            // const isCustomTime = !!myCustom || !!myRule;
             let myShortTime: string | undefined = undefined;
             if (myHours) {
               myShortTime = `${myHours}ч`;
@@ -1105,7 +1090,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                           if (c.hours) {
                             text = `${c.hours}ч`;
                           } else if (c.rule) {
-                            text = formatHourLabel(c.rule.hours.start, c.rule.hours.end) || cTimes?.short;
+                            text = formatHourLabel(c.rule.start, c.rule.end) || cTimes?.short;
                           } else {
                             text = cTimes?.short;
                           }
@@ -1135,7 +1120,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                       if (c.hours) {
                         text = `${c.hours}ч`;
                       } else if (c.rule) {
-                        text = formatHourLabel(c.rule.hours.start, c.rule.hours.end) || cTimes?.short;
+                        text = formatHourLabel(c.rule.start, c.rule.end) || cTimes?.short;
                       } else {
                         text = cTimes?.short;
                       }

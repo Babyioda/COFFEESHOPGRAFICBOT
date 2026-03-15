@@ -126,7 +126,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     setPrefsLoaded(false);
     console.log('[ProfileView] Setting up Firebase listeners for:', linkedEmp.id);
     const unsubscribers: (() => void)[] = [];
-    
     try {
       // Подписка на все prefs
       const unsubPrefs = watchEmpPrefs((allPrefs) => {
@@ -142,8 +141,11 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           if (p.customUsername) {
             console.log('[ProfileView] Loaded customUsername from Firebase:', p.customUsername);
             setManualUsername(p.customUsername);
+            // Добавляем customUsername в linkedEmp
+            linkedEmp.customUsername = p.customUsername;
           } else {
             setManualUsername('');
+            if (linkedEmp.customUsername) delete linkedEmp.customUsername;
           }
           setPrefsLoaded(true);
         } catch (err) {
@@ -1151,109 +1153,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     { id: 'bugreport', label: 'Баг-репорт', icon: '🐛' },
   ];
 
-  // ── Экран привязки ──
-  if (!linkedEmp || isLinking) {
-    return (
-      <div className="space-y-4 pb-6">
-        {/* Шапка */}
-        <div className="rounded-3xl p-5 text-white shadow-lg" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}>
-          <div className="flex items-center gap-3 mb-3">
-            {tgUser?.photo_url ? (
-              <img src={tgUser.photo_url} alt="" className="w-14 h-14 rounded-2xl object-cover" />
-            ) : (
-              <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-bold">
-                {tgUser ? (tgUser.first_name[0] + (tgUser.last_name?.[0] ?? '')).toUpperCase() : '👤'}
-              </div>
-            )}
-            <div>
-              <h2 className="font-bold text-lg leading-tight">
-                {tgUser ? getTgFullName(tgUser) : 'Мой профиль'}
-              </h2>
-              {tgUser?.username && <p className="text-white/60 text-sm">@{tgUser.username}</p>}
-              {tgId && <p className="text-white/40 text-xs">ID: {tgId}</p>}
-            </div>
-          </div>
-          <p className="text-white/70 text-sm">Найди себя в списке сотрудников чтобы начать</p>
-        </div>
-
-        {/* Поиск */}
-        <div className={`rounded-2xl p-4 shadow-sm border ${card}`}>
-          <h3 className={`font-bold text-sm mb-1 ${lbl}`}>🔍 Найди себя в графике</h3>
-          <p className={`text-xs mb-3 ${sub}`}>Введи своё имя или фамилию</p>
-          <input
-            type="text" value={searchQuery}
-            onChange={e => {
-              setSearchQuery(e.target.value);
-              setSearchResults(findMatchingEmployees(data, e.target.value));
-            }}
-            placeholder="Иванов Иван..."
-            className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
-          />
-          {searchResults.length > 0 && (
-            <div className="mt-3 space-y-2">
-              {searchResults.map(emp => {
-                const empDept = emp.department ? DEPARTMENT_CONFIG[emp.department] : null;
-                return (
-                  <button key={emp.id} onClick={() => handleLinkEmployee(emp.id, emp.name)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${isDark ? 'bg-slate-700 border-slate-600 hover:border-indigo-500' : 'bg-gray-50 border-gray-200 hover:border-indigo-300'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ backgroundColor: emp.color }}>
-                      {emp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
-                    </div>
-                    <div className="flex-1 text-left">
-                      <p className={`font-semibold text-sm ${lbl}`}>{emp.name}</p>
-                      <p className={`text-xs ${sub}`}>{emp.role}</p>
-                    </div>
-                    {empDept && <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ color: empDept.color, backgroundColor: empDept.color + '20' }}>{empDept.icon} {empDept.label}</span>}
-                    <span className={`text-sm ${sub}`}>›</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {searchQuery.length > 1 && searchResults.length === 0 && (
-            <p className={`text-xs mt-3 text-center ${sub}`}>Никого не найдено. Проверь написание имени.</p>
-          )}
-        </div>
-
-        {/* Настройки доступны без привязки */}
-        <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
-          <button
-            onClick={() => setActiveSection(activeSection === 'settings' ? 'staff' : 'settings')}
-            className={`w-full flex items-center justify-between px-4 py-3.5 ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-50'}`}
-          >
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`}>⚙️</div>
-              <span className={`font-semibold text-sm ${lbl}`}>Настройки</span>
-            </div>
-            <span className={`text-sm ${sub}`}>{activeSection === 'settings' ? '▲' : '▼'}</span>
-          </button>
-          {activeSection === 'settings' && (
-            <div className="px-4 pt-2">
-              <SettingsSection
-                sheetId={sheetId} sheetGid={sheetGid}
-                sheetsApiKey={sheetsApiKey}
-                appsScriptUrl={appsScriptUrl}
-                onSave={onSave} lastSync={lastSync}
-                isLoading={isLoading} onRefresh={onRefresh}
-                error={error} fakeDate={fakeDate}
-                onFakeDateChange={onFakeDateChange}
-                isAdmin={isAdmin}
-                linkedEmp={null}
-                tgUser={tgUser}
-                tgId={tgId}
-                onEmployeeUpdate={onEmployeeUpdate}
-              />
-            </div>
-          )}
-        </div>
-
-        {isLinking && linkedEmpId && (
-          <button onClick={() => setIsLinking(false)} className={`w-full py-3 rounded-2xl font-semibold text-sm border transition-all active:scale-95 ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'}`}>← Отмена</button>
-        )}
-      </div>
-    );
-  }
 
   // ── Основной профиль ──
   return (
@@ -1270,15 +1169,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               ) : (
                 <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-extrabold shadow-inner">
-                  {linkedEmp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                  {linkedEmp?.name ? linkedEmp.name.split(' ').map(p => p[0]).slice(0,2).join('') : '👤'}
                 </div>
               )}
               <div>
-                <h2 className="font-extrabold text-xl leading-tight">{tgName ?? linkedEmp.name}</h2>
-                {tgName && tgName !== linkedEmp.name && <p className="text-white/60 text-xs">{linkedEmp.name}</p>}
+                <h2 className="font-extrabold text-xl leading-tight">{tgName ?? linkedEmp?.name ?? 'Мой профиль'}</h2>
+                {tgName && linkedEmp?.name && tgName !== linkedEmp.name && <p className="text-white/60 text-xs">{linkedEmp.name}</p>}
+                {/* Telegram username */}
+                {linkedEmp?.tgUsername && (
+                  <p className="text-white/60 text-xs">@{linkedEmp.tgUsername}</p>
+                )}
+                  {/* customUsername из prefs (если есть и нет tgUsername) */}
+                  {!linkedEmp?.tgUsername && linkedEmp?.customUsername && (
+                    <p className="text-white/60 text-xs">@{linkedEmp.customUsername}</p>
+                  )}
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   {deptCfg && <span className="text-xs font-semibold bg-white/20 rounded-full px-2 py-0.5">{deptCfg.icon} {deptCfg.label}</span>}
-                  <span className="text-xs bg-white/10 rounded-full px-2 py-0.5">{linkedEmp.role}</span>
+                  {linkedEmp?.role && <span className="text-xs bg-white/10 rounded-full px-2 py-0.5">{linkedEmp.role}</span>}
                 </div>
               </div>
             </div>

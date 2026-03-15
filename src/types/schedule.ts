@@ -173,6 +173,7 @@ export interface Employee {
   showTelegram?: boolean;  // показывать ли кнопку Telegram на странице сотрудника
   birthday?: string;       // день рождения в формате MM-DD (без года)
   tgUsername?: string;     // @username в Telegram
+  customUsername?: string; // вручную введённый @username
 }
 
 export interface ShiftEntry {
