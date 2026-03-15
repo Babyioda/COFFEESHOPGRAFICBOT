@@ -84,6 +84,42 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [manualUsername, setManualUsername] = useState(''); // manually entered @username
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
+  // Очистка localStorage
+  const handleClearLocalStorage = () => {
+    const tg = window.Telegram?.WebApp;
+    const confirm = tg
+      ? tg.showConfirm
+      : (msg: string, cb: (confirmed: boolean) => void) => cb(window.confirm(msg));
+    confirm('Вы уверены, что хотите полностью очистить все локальные данные?\n\nВас потребуется заново привязать профиль.', (confirmed: boolean) => {
+      if (!confirmed) return;
+      // Ключи, которые нужно удалить
+      const keys = [
+        'sf_linked_emp_id',
+        'sf_tg_links',
+        'sf_emp_prefs',
+        'sf_admin_shift_edits',
+        'sf_admin_emp_notes',
+        'sf_admin_emp_rules',
+        'ss_sheet_id',
+        'ss_sheet_gid',
+        'ss_sheets_api_key',
+        'ss_apps_script_url',
+        'sf_friends_ids',
+        'sf_invite_codes',
+        'sf_tg_name',
+      ];
+      keys.forEach(k => localStorage.removeItem(k));
+      // Очищаем всё, если нужно (альтернативно)
+      // localStorage.clear();
+      if (tg && tg.showAlert) {
+        tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
+      } else {
+        alert('✅ Данные успешно очищены!\nСтраница будет перезагружена.');
+        window.location.reload();
+      }
+    });
+  };
+
   // Реалтайм-подписка на настройки сотрудника (день рождения, Telegram, username), правила и заметки
   useEffect(() => {
     if (!linkedEmp) return;
@@ -205,6 +241,16 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-95 ${isDark ? 'bg-slate-600 text-slate-100 shadow-sm' : 'text-gray-400'}`}
           >🌙 Тёмная</button>
         </div>
+      </div>
+
+      {/* Очистка localStorage */}
+      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🧹 Очистить данные</h3>
+        <p className={`text-xs mb-3 ${sub}`}>Полностью удалить все локальные данные и привязки на этом устройстве.</p>
+        <button
+          onClick={handleClearLocalStorage}
+          className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-red-600"
+        >Очистить данные</button>
       </div>
 
       {/* Google Sheets — только администраторы */}
