@@ -1108,7 +1108,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   useEffect(() => { initTelegramApp(); }, []);
 
-  // Автологин через Telegram ID
+  // Автологин через Telegram ID (только при первой загрузке)
   useEffect(() => {
     if (tgId && !linkedEmpId && data.employees.length > 0) {
       const empId = getEmpIdByTgId(tgId);
@@ -1118,7 +1118,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         saveLinkedEmpId(empId);
       }
     }
-  }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
+  }, [tgId]); // Убрали data.employees и linkedEmpId из зависимостей
 
   const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
