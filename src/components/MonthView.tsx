@@ -29,7 +29,7 @@ const MONTHS_RU_GEN = [
 
 const DAYS_FULL = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
 
-const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
+const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 
 const SHIFT_CARD_GRADIENT: Record<ShiftType, string> = {
   daily:    'from-violet-600 to-purple-700',

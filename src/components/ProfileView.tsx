@@ -14,7 +14,7 @@ import { fetchEmployeeNotes, testConnection, testFullFirebase, testFirestoreInde
 import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
+const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 const STORAGE_TG_NAME     = 'sf_tg_name';
 const STORAGE_FRIENDS_IDS = 'sf_friends_ids';
 
@@ -796,6 +796,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                 >
                   ⏰ Правило (часы)
                 </button>
+                {/* Кнопка удаления заметок только для админов и только на вкладке заметки */}
+                {isAdmin && editTab === 'notes' && (
+                  <button
+                    onClick={async () => {
+                      if (!editingEmp) return;
+                      if (!window.confirm('Удалить все старые заметки этого сотрудника?')) return;
+                      try {
+                        const { deleteEmployeeNotes } = await import('../utils/firebase');
+                        await deleteEmployeeNotes(editingEmp.id);
+                        alert('✅ Все заметки сотрудника удалены из Firebase');
+                      } catch (err) {
+                        alert('❌ Ошибка при удалении заметок: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                      }
+                    }}
+                    className={`flex-shrink-0 py-2 px-3 rounded-lg text-sm font-semibold transition-all bg-red-500 text-white hover:bg-red-600 active:scale-95`}
+                    style={{ minWidth: 0 }}
+                    title="Удалить все заметки сотрудника"
+                  >🗑️ Удалить заметки</button>
+                )}
               </div>
             </div>
             <div className="px-5 py-4">
@@ -1160,7 +1179,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
 
   const headerGradient = dept
-    ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[dept]
+    ? ({
+        bar_manager: 'linear-gradient(135deg,#FFD700,#FFD538)',
+        power: 'linear-gradient(135deg,#b45309,#d97706)',
+        bar: 'linear-gradient(135deg,#7c3aed,#a855f7)',
+        hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)',
+        kitchen: 'linear-gradient(135deg,#15803d,#22c55e)',
+      } as Record<Department, string>)[dept]
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
 
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';

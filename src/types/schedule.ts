@@ -88,7 +88,7 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
   bar_manager: {
     label: 'Бар-менеджер',
     icon: '⭐',
-    color: '#FFD538',
+    color: '#FFD700', // ярко-золотой
     bgColor: 'bg-yellow-100',
     textColor: 'text-yellow-800',
     roles: ['бар-менеджер', 'барменеджер'],

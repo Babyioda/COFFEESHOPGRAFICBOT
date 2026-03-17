@@ -18,7 +18,7 @@ function formatDate(y: number, m: number, d: number): string {
 
 const DAY_LABELS_SHORT = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
-const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
+const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 
 const TIMELINE_COLOR: Record<ShiftType, string> = {
   daily:    'bg-violet-500',
