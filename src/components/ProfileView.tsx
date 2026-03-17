@@ -10,7 +10,7 @@ import {
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
 import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId, getPrefsSyncError } from '../utils/adminEdits';
-import { fetchEmployeeNotes, testConnection, testFullFirebase } from '../utils/firebase';
+import { fetchEmployeeNotes, testConnection, testFullFirebase, testFirestoreIndexError } from '../utils/firebase';
 import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -555,11 +555,25 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             >
               🧪 Полный CRUD тест Firebase
             </button>
+            {/* Удалена дублирующаяся кнопка Firestore Index Error Test */}
           </div>
           <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
         </div>
       )}
-
+            <button
+              onClick={async () => {
+                try {
+                  alert('🧪 Запуск теста индексации Firestore...');
+                  await testFirestoreIndexError();
+                  alert('✅ Тест индексации завершён! Подробности в консоли.');
+                } catch (e) {
+                  alert(`❌ Ошибка теста индексации: ${e}`);
+                }
+              }}
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-red-500 hover:bg-red-600 text-white"
+            >
+              🔥 Firestore Index Error Test
+            </button>
 
     </div>
   );
