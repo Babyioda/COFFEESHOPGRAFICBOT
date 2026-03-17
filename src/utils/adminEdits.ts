@@ -187,14 +187,31 @@ export interface EmpPrefs {
 
 const STORAGE_EMP_PREFS = 'sf_emp_prefs';
 
+
+// Глобальный индикатор ошибки синхронизации
+let globalPrefsSyncError = false;
+let globalPrefsSyncErrorMsg = '';
+
 export function loadEmpPrefs(): EmpPrefs[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_EMP_PREFS) || '[]'); }
-  catch { return []; }
+  try {
+    const raw = localStorage.getItem(STORAGE_EMP_PREFS) || '[]';
+    const parsed = JSON.parse(raw);
+    globalPrefsSyncError = false;
+    globalPrefsSyncErrorMsg = '';
+    return parsed;
+  } catch (err) {
+    globalPrefsSyncError = true;
+    globalPrefsSyncErrorMsg = '[AdminEdits] Ошибка чтения prefs из localStorage: ' + (err instanceof Error ? err.message : String(err));
+    // Логируем ошибку
+    console.error(globalPrefsSyncErrorMsg);
+    // Можно попытаться очистить повреждённые данные
+    try { localStorage.removeItem(STORAGE_EMP_PREFS); } catch {}
+    return [];
+  }
 }
 
 export function saveEmpPrefs(pref: EmpPrefs): void {
   console.log('[AdminEdits] Saving employee prefs to Firebase:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday, customUsername: pref.customUsername });
-  
   // Save to Firebase first (primary source)
   setEmpPrefs({
     empId: pref.empId,
@@ -203,16 +220,29 @@ export function saveEmpPrefs(pref: EmpPrefs): void {
     customUsername: pref.customUsername,
   }).then(() => {
     console.log('[AdminEdits] Employee prefs saved to Firebase successfully');
+    globalPrefsSyncError = false;
+    globalPrefsSyncErrorMsg = '';
   }).catch((err) => {
-    console.error('[AdminEdits] Failed to save employee prefs to Firebase:', err);
+    globalPrefsSyncError = true;
+    globalPrefsSyncErrorMsg = '[AdminEdits] Failed to save employee prefs to Firebase: ' + (err instanceof Error ? err.message : String(err));
+    console.error(globalPrefsSyncErrorMsg);
     // Fallback to localStorage as emergency backup
     const all = loadEmpPrefs();
     const idx = all.findIndex(e => e.empId === pref.empId);
     if (idx >= 0) all[idx] = { ...all[idx], ...pref };
     else all.push(pref);
-    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
-    console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
+    try {
+      localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
+      console.warn('[AdminEdits] Saved to localStorage as emergency backup (Firebase down?)');
+    } catch (e) {
+      console.error('[AdminEdits] FATAL: Failed to save prefs to localStorage:', e);
+    }
   });
+}
+
+// Функция для UI: получить статус ошибки синхронизации
+export function getPrefsSyncError(): { error: boolean; message: string } {
+  return { error: globalPrefsSyncError, message: globalPrefsSyncErrorMsg };
 }
 
 export function getEmpPrefs(empId: string): EmpPrefs | undefined {
@@ -224,7 +254,7 @@ const STORAGE_LINKED_ID = 'sf_linked_emp_id';
 
 export function saveLinkedEmpId(empId: string | null): void {
   if (!empId) {
-    console.log('[AdminEdits] Clearing linked employee');
+    console.log('[AdminEdits] saveLinkedEmpId: Clearing linked employee (empId=null)');
     const uid = getCurrentUid();
     if (uid) {
       // Remove from Firebase first (primary)
@@ -235,13 +265,15 @@ export function saveLinkedEmpId(empId: string | null): void {
       }).finally(() => {
         // Then clear localStorage as fallback
         localStorage.removeItem(STORAGE_LINKED_ID);
+        console.log('[AdminEdits] localStorage.removeItem(STORAGE_LINKED_ID) called');
       });
     } else {
       localStorage.removeItem(STORAGE_LINKED_ID);
+      console.log('[AdminEdits] localStorage.removeItem(STORAGE_LINKED_ID) called (no UID)');
     }
     return;
   }
-  console.log('[AdminEdits] Saving linked employee:', empId);
+  console.log('[AdminEdits] saveLinkedEmpId: Saving linked employee:', empId);
   const uid = getCurrentUid();
   if (uid) {
     // Save to Firebase first (primary)
@@ -256,6 +288,7 @@ export function saveLinkedEmpId(empId: string | null): void {
   } else {
     // No UID, just save to localStorage
     localStorage.setItem(STORAGE_LINKED_ID, empId);
+    console.log('[AdminEdits] localStorage.setItem(STORAGE_LINKED_ID, empId) called (no UID)', empId);
   }
 }
 

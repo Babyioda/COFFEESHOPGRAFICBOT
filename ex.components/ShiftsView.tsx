@@ -275,7 +275,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
       if (!mounted) return;
       const editMap: Record<string, any> = {};
       edits.forEach(edit => {
-        editMap[edit.empId] = edit;
+        editMap[`${edit.empId}-${edit.date}`] = edit;
       });
       console.log('[DayModal] Shift edits updated:', editMap);
       setFsShiftEdits(editMap);
@@ -330,9 +330,9 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
     };
   }, []);
 
-  const getCustomTimes = (empId: string) => {
+  const getCustomTimes = (empId: string, dateStr: string) => {
     // Try Firebase first, then localStorage as fallback
-    const fbEdit = fsShiftEdits[empId];
+    const fbEdit = fsShiftEdits[`${empId}-${dateStr}`];
     if (fbEdit) {
       return {
         customStart: fbEdit.customStart,
@@ -358,7 +358,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
     if (fbShiftNote) return fbShiftNote;
     
     // Fallback to shift edit note
-    const fbEdit = fsShiftEdits[empId];
+    const fbEdit = fsShiftEdits[`${empId}-${dateStr}`];
     if (fbEdit?.note) return fbEdit.note;
     
     return '';
@@ -488,9 +488,9 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                         </div>
                         <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-gray-50'}`}>
                           {sg.map((w, i) => {
-                            const custom    = getCustomTimes(w.emp.id);
+                            const custom    = getCustomTimes(w.emp.id, dateStr);
                             const empNote   = getNote(w.emp.id);
-                            const shiftNote = getShiftNote(w.emp.id, dateStr, dateStr);
+                            const shiftNote = getShiftNote(w.emp.id, dateStr);
                             const timeStart = custom?.customStart ?? SHIFT_TIMES[w.shift]?.start;
                             const timeEnd   = custom?.customEnd   ?? SHIFT_TIMES[w.shift]?.end;
                             const hasCustomTime = custom?.customStart || custom?.customEnd;

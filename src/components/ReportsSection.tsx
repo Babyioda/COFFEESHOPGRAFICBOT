@@ -63,7 +63,7 @@ function getEmployeeRates(emp: Employee): { role: string; rate: number }[] {
   return result;
 }
 
-type ReportType = 'shifts' | 'hours' | 'income' | 'revenue' | 'carts';
+type ReportType = 'shifts' | 'hours' | 'income';
 type ShiftFilter = 'all' | 'daily' | 'day' | 'night';
 
 interface ReportResult {
@@ -81,18 +81,9 @@ interface ReportResult {
   income: number;
   shifts: Array<{ employeeId: string; date: string; shift: ShiftType }>;
   includeFuture?: boolean;
-  // для revenue
-  revenueInput?: number;
-  revenueResult?: number;
-  // для carts
-  cartsInput?: number;
-  cartsResult?: number;
 }
 
-interface WidgetState {
-  revenue: boolean;
-  carts: boolean;
-}
+interface WidgetState {}
 
 function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -122,15 +113,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   const [dateTo, setDateTo]             = useState(toDateStr(new Date(now.getFullYear(), now.getMonth()+1, 0)));
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [includeFuture, setIncludeFuture] = useState(false);
-  const [revenueInput, setRevenueInput] = useState('');
-  const [cartsInput, setCartsInput]     = useState('');
-  const [widgets, setWidgets]           = useState<WidgetState>(() => {
-    try { return JSON.parse(localStorage.getItem('sf_widgets') || '{"revenue":false,"carts":false}'); } catch { return { revenue: false, carts: false }; }
-  });
-  const [revenueHistory, setRevenueHistory] = useState<Array<{ date: string; value: number; result: number }>>(() => {
-    try { return JSON.parse(localStorage.getItem('sf_revenue_history') || '[]'); } catch { return []; }
-  });
-  const [showRevenueHistory, setShowRevenueHistory] = useState(false);
+  const [widgets, setWidgets] = useState<WidgetState>(() => ({}));
   const [reports, setReports]           = useState<ReportResult[]>(() => {
     try { return JSON.parse(localStorage.getItem('sf_reports') || '[]'); } catch { return []; }
   });
@@ -151,8 +134,6 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   const REPORT_TYPES: { id: ReportType; label: string; icon: string; desc: string }[] = [
     { id: 'hours',   icon: '⏱️', label: 'Отработанные часы', desc: 'Суммарные часы за период' },
     { id: 'income',  icon: '💰', label: 'Доход',             desc: 'Зарплата по ставке должности' },
-    { id: 'revenue', icon: '📈', label: 'Подсчёт выручки',   desc: '2.5% от суммы выручки' },
-    { id: 'carts',   icon: '🛒', label: 'Подсчёт тележек',   desc: 'Количество тележек × 260 ₽' },
   ];
 
   const SHIFT_FILTERS: { id: ShiftFilter; label: string; bg: string }[] = [
@@ -178,76 +159,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
   const handleGenerate = () => {
     if (!reportType) return;
     // Отчёты выручки не требуют linkedEmpId
-    if (reportType === 'revenue') {
-      const val = parseFloat(revenueInput);
-      if (!val || val <= 0) return;
-      const result = Math.round(val * 0.025);
-      const historyEntry = { date: new Date().toISOString(), value: val, result };
-      const newHistory = [historyEntry, ...revenueHistory].slice(0, 50);
-      setRevenueHistory(newHistory);
-      localStorage.setItem('sf_revenue_history', JSON.stringify(newHistory));
-      
-      // Добавляем отчёт в список сохранённых отчётов
-      const reportEntry: ReportResult = {
-        id: Date.now().toString(), 
-        createdAt: new Date().toISOString(),
-        type: 'revenue', 
-        shiftFilter: 'all', 
-        dateFrom, 
-        dateTo,
-        hourlyRate: 0, 
-        selectedRole: '', 
-        totalShifts: 0,
-        countByType: { all: 0, daily: 0, day: 0, night: 0 },
-        totalHours: 0, 
-        income: 0, 
-        shifts: [],
-        revenueInput: val, 
-        revenueResult: result,
-      };
-      const next = [reportEntry, ...reports].slice(0, 20);
-      setReports(next);
-      localStorage.setItem('sf_reports', JSON.stringify(next));
-      
-      // Добавляем виджет
-      if (!widgets.revenue) {
-        const newWidgets = { ...widgets, revenue: true };
-        setWidgets(newWidgets);
-        localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
-      }
-      
-      setRevenueInput('');
-      setShowForm(false);
-      setReportType(null);
-      setSelected(reportEntry);
-      return;
-    }
-
-    if (reportType === 'carts') {
-      const val = parseInt(cartsInput);
-      if (!val || val <= 0) return;
-      const result: ReportResult = {
-        id: Date.now().toString(), createdAt: new Date().toISOString(),
-        type: 'carts', shiftFilter: 'all', dateFrom, dateTo,
-        hourlyRate: 0, selectedRole: '', totalShifts: 0,
-        countByType: { all: 0, daily: 0, day: 0, night: 0 },
-        totalHours: 0, income: 0, shifts: [],
-        cartsInput: val, cartsResult: val * 260,
-      };
-      const next = [result, ...reports].slice(0, 20);
-      setReports(next); localStorage.setItem('sf_reports', JSON.stringify(next));
-      
-      // Добавляем виджет
-      if (!widgets.carts) {
-        const newWidgets = { ...widgets, carts: true };
-        setWidgets(newWidgets);
-        localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
-      }
-      
-      setShowForm(false); setSelected(result); setCartsInput('');
-      setReportType(null);
-      return;
-    }
+    // ...existing code...
 
     if (!linkedEmpId) return;
     const from = new Date(dateFrom + 'T00:00:00');
@@ -345,8 +257,6 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
       income:  'linear-gradient(135deg,#059669,#10b981)',
       hours:   'linear-gradient(135deg,#2563eb,#3b82f6)',
       shifts:  'linear-gradient(135deg,#7c3aed,#a855f7)',
-      revenue: 'linear-gradient(135deg,#d97706,#f59e0b)',
-      carts:   'linear-gradient(135deg,#0369a1,#38bdf8)',
     };
     const dayNames = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
 
@@ -362,29 +272,16 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
         {/* Шапка */}
         <div className="rounded-3xl p-5 text-white shadow-lg" style={{ background: gradients[r.type] }}>
           <div className="text-3xl mb-2">
-            {r.type === 'income' ? '💰' : r.type === 'hours' ? '⏱️' : r.type === 'revenue' ? '📈' : r.type === 'carts' ? '🛒' : '📅'}
+            {r.type === 'income' ? '💰' : r.type === 'hours' ? '⏱️' : '📅'}
           </div>
           <div className="text-4xl font-extrabold mb-1">
             {r.type === 'income'
               ? `${r.income.toLocaleString('ru-RU')} ₽`
               : r.type === 'hours'
               ? `${r.totalHours} ч`
-              : r.type === 'revenue'
-              ? `${(r.revenueResult ?? 0).toLocaleString('ru-RU')} ₽`
-              : r.type === 'carts'
-              ? `${(r.cartsResult ?? 0).toLocaleString('ru-RU')} ₽`
               : `${r.totalShifts} смен`}
           </div>
-          {r.type === 'revenue' && (
-            <div className="text-white/70 text-sm mt-1">
-              2.5% от {(r.revenueInput ?? 0).toLocaleString('ru-RU')} ₽
-            </div>
-          )}
-          {r.type === 'carts' && (
-            <div className="text-white/70 text-sm mt-1">
-              {r.cartsInput} тележек × 260 ₽
-            </div>
-          )}
+          {/* ...удалено: revenue/carts детали... */}
           {r.type === 'income' && (
             <>
               <div className="text-white/70 text-sm mt-1">
@@ -540,41 +437,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
           </div>
 
           <div className="p-4 space-y-2">
-            {/* Выручка */}
-            <button
-              onClick={() => setReportType('revenue')}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                isDark ? 'border-slate-700 bg-slate-700/40 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'
-              }`}
-            >
-              <span className="text-xl">📈</span>
-              <div className="flex-1 text-left">
-                <p className={`text-sm font-semibold ${lbl}`}>
-                  Подсчёт выручки
-                </p>
-                <p className={`text-xs ${sub}`}>2.5% от суммы выручки</p>
-              </div>
-              <span className={`text-sm ${sub}`}>›</span>
-            </button>
-
-            {/* Тележки */}
-            <button
-              onClick={() => setReportType('carts')}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all active:scale-[0.98] ${
-                isDark ? 'border-slate-700 bg-slate-700/40 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'
-              }`}
-            >
-              <span className="text-xl">🛒</span>
-              <div className="flex-1 text-left">
-                <p className={`text-sm font-semibold ${lbl}`}>
-                  Подсчёт тележек
-                </p>
-                <p className={`text-xs ${sub}`}>Количество тележек × 260 ₽</p>
-              </div>
-              <span className={`text-sm ${sub}`}>›</span>
-            </button>
-
-            <div className={`my-3 h-px ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
+            {/* ...удалено: кнопки revenue/carts... */}
 
             {/* Остальные отчеты */}
             {REPORT_TYPES.filter(rt => rt.id !== 'revenue' && rt.id !== 'carts' && rt.id !== 'shifts').map(rt => (
@@ -616,130 +479,7 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
               ← Назад к типам
             </button>
 
-            {/* ─── ФОРМА ВЫРУЧКИ ─── */}
-            {reportType === 'revenue' && (
-              <div>
-                <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${sub}`}>Размер выручки</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <input
-                    type="number"
-                    value={revenueInput}
-                    onChange={e => setRevenueInput(e.target.value)}
-                    placeholder="100000"
-                    className={`flex-1 text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-amber-400 ${inp}`}
-                  />
-                </div>
-                {revenueInput && parseFloat(revenueInput) > 0 && (
-                  <div className={`rounded-xl p-3 flex items-center justify-between mb-4 ${
-                    isDark ? 'bg-amber-900/30 border border-amber-700/40' : 'bg-amber-50 border border-amber-200'
-                  }`}>
-                    <p className={`text-xs ${isDark ? 'text-amber-300' : 'text-amber-700'}`}>2.5% от выручки:</p>
-                    <p className={`text-base font-extrabold ${isDark ? 'text-amber-400' : 'text-amber-600'}`}>
-                      {Math.round(parseFloat(revenueInput) * 0.025).toLocaleString('ru-RU')} ₽
-                    </p>
-                  </div>
-                )}
-                <button
-                  onClick={() => {
-                    const val = parseFloat(revenueInput);
-                    if (val && val > 0) {
-                      const result = Math.round(val * 0.025);
-                      const historyEntry = { date: new Date().toISOString(), value: val, result };
-                      const newHistory = [historyEntry, ...revenueHistory].slice(0, 50);
-                      setRevenueHistory(newHistory);
-                      localStorage.setItem('sf_revenue_history', JSON.stringify(newHistory));
-                      
-                      // Добавляем виджет
-                      if (!widgets.revenue) {
-                        const newWidgets = { ...widgets, revenue: true };
-                        setWidgets(newWidgets);
-                        localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
-                      }
-                      
-                      setRevenueInput('');
-                      setShowForm(false);
-                      setReportType(null);
-                    }
-                  }}
-                  disabled={!revenueInput || parseFloat(revenueInput) <= 0}
-                  className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Сохранить отчёт
-                </button>
-              </div>
-            )}
-
-            {/* ─── ФОРМА ТЕЛЕЖЕК ─── */}
-            {reportType === 'carts' && (
-              <div>
-                <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${sub}`}>Количество тележек</p>
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <button
-                    onClick={() => setCartsInput(String(Math.max(0, parseInt(cartsInput || '0') - 1)))}
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border transition-all active:scale-90 ${
-                      isDark ? 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    −
-                  </button>
-                  <div className="flex-1 text-center">
-                    <p className={`text-3xl font-extrabold ${lbl}`}>{cartsInput || '0'}</p>
-                    <p className={`text-xs mt-1 ${sub}`}>тележек</p>
-                  </div>
-                  <button
-                    onClick={() => setCartsInput(String(parseInt(cartsInput || '0') + 1))}
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold border transition-all active:scale-90 ${
-                      isDark ? 'border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    +
-                  </button>
-                </div>
-                {cartsInput && parseInt(cartsInput) > 0 && (
-                  <div className={`mt-3 rounded-xl p-3 flex items-center justify-between mb-4 ${
-                    isDark ? 'bg-sky-900/30 border border-sky-700/40' : 'bg-sky-50 border border-sky-200'
-                  }`}>
-                    <p className={`text-xs ${isDark ? 'text-sky-300' : 'text-sky-700'}`}>
-                      {parseInt(cartsInput)} × 260 ₽:
-                    </p>
-                    <p className={`text-base font-extrabold ${isDark ? 'text-sky-400' : 'text-sky-600'}`}>
-                      {(parseInt(cartsInput) * 260).toLocaleString('ru-RU')} ₽
-                    </p>
-                  </div>
-                )}
-                <button
-                  onClick={() => {
-                    const val = parseInt(cartsInput);
-                    if (!val || val <= 0) return;
-                    const result: ReportResult = {
-                      id: Date.now().toString(), createdAt: new Date().toISOString(),
-                      type: 'carts', shiftFilter: 'all', dateFrom, dateTo,
-                      hourlyRate: 0, selectedRole: '', totalShifts: 0,
-                      countByType: { all: 0, daily: 0, day: 0, night: 0 },
-                      totalHours: 0, income: 0, shifts: [],
-                      cartsInput: val, cartsResult: val * 260,
-                    };
-                    const next = [result, ...reports].slice(0, 20);
-                    setReports(next); localStorage.setItem('sf_reports', JSON.stringify(next));
-                    
-                    // Добавляем виджет
-                    if (!widgets.carts) {
-                      const newWidgets = { ...widgets, carts: true };
-                      setWidgets(newWidgets);
-                      localStorage.setItem('sf_widgets', JSON.stringify(newWidgets));
-                    }
-                    
-                    setCartsInput('');
-                    setShowForm(false);
-                    setReportType(null);
-                  }}
-                  disabled={!cartsInput || parseInt(cartsInput) <= 0}
-                  className="w-full py-3.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Сохранить отчёт
-                </button>
-              </div>
-            )}
+            {/* ...удалено: формы revenue/carts... */}
 
             {/* ─── ФОРМА СМЕН/ЧАСОВ/ДОХОДА ─── */}
             {(reportType === 'hours' || reportType === 'income') && (

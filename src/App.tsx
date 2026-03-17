@@ -382,7 +382,7 @@ function AppInner() {
             onLinkedEmpChange={(id) => {
               setLinkedEmpId(id);
               saveLinkedEmpId(id);
-              if (id) setActiveTab('shifts');
+              // Не переводим автоматически на shifts — пусть пользователь сам выберет
             }}
             onMonthChange={handleMonthChange}
             sheetsApiKey={sheetsApiKey}

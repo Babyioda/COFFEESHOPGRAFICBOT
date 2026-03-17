@@ -9,8 +9,8 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
-import { fetchEmployeeNotes, testConnection } from '../utils/firebase';
+import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId, getPrefsSyncError } from '../utils/adminEdits';
+import { fetchEmployeeNotes, testConnection, testFullFirebase } from '../utils/firebase';
 import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -77,6 +77,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
   const [copyingDebug, setCopyingDebug] = useState(false);
+  const [showSyncError, setShowSyncError] = useState(false);
 
   // preferences for linked employee
   const [showTelegramPref, setShowTelegramPref] = useState(false);
@@ -223,20 +224,16 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
 
+  
   return (
-        // Блок отладки
-        const renderDebugBlock = () => (
-          <div style={{ marginTop: 24, padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>🛠️ Отладка</div>
-            <button
-              style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', marginBottom: 8 }}
-              onClick={handleClearLocalStorage}
-            >
-              Очистить все локальные данные
-            </button>
-          </div>
-        );
     <div className="space-y-4 pb-6">
+      {renderDebugBlock()}
+      {/* Баннер ошибки синхронизации prefs */}
+      {showSyncError && (
+        <div className="rounded-xl p-3 mb-2 bg-red-100 border border-red-300 text-red-700 text-sm font-semibold flex items-center gap-2">
+          <span>⚠️ Ошибка синхронизации настроек! Изменения могут не сохраниться. Проверьте соединение с интернетом или попробуйте очистить данные.</span>
+        </div>
+      )}
       {/* Тема */}
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
         <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🎨 Тема оформления</h3>
@@ -547,13 +544,16 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             <button
               onClick={async () => {
                 try {
-                  await testConnection();
-                  alert('Проверка отправлена в консоль');
-                } catch {}
+                  alert('🔍 Запускается комплексный тест Firebase (CRUD)...');
+                  const results = await testFullFirebase();
+                  alert(`✅ Тест завершён! Пройдено коллекций: ${results.filter(r => r.write.success && r.delete.success).length}/${results.length}. Подробности в консоли`);
+                } catch (e) {
+                  alert(`❌ Ошибка теста: ${e}`);
+                }
               }}
-              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-blue-500 hover:bg-blue-600 text-white"
             >
-              🔌 Тест Firebase
+              🧪 Полный CRUD тест Firebase
             </button>
           </div>
           <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
@@ -1103,7 +1103,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   useEffect(() => { initTelegramApp(); }, []);
 
-  // Автологин через Telegram ID
+  // Автологин через Telegram ID (только при первой загрузке)
   useEffect(() => {
     if (tgId && !linkedEmpId && data.employees.length > 0) {
       const empId = getEmpIdByTgId(tgId);
@@ -1113,7 +1113,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         saveLinkedEmpId(empId);
       }
     }
-  }, [tgId, linkedEmpId, data.employees, onLinkedEmpChange]);
+  }, [tgId]); // Убрали data.employees и linkedEmpId из зависимостей
 
   const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
   const dept      = linkedEmp ? (linkedEmp.department ?? getDepartment(linkedEmp.role)) : null;
@@ -1248,6 +1248,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 error={error} fakeDate={fakeDate}
                 onFakeDateChange={onFakeDateChange}
                 isAdmin={isAdmin}
+                onOpenAdminPanel={() => setShowAdminPanel(true)}
                 linkedEmp={null}
                 tgUser={tgUser}
                 tgId={tgId}
