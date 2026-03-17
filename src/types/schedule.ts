@@ -73,7 +73,7 @@ export const SHIFT_CONFIG: Record<ShiftType, ShiftConfig> = {
 };
 
 // ======== Отделы ========
-export type Department = 'power' | 'bar' | 'hall' | 'kitchen';
+export type Department = 'bar_manager' | 'power' | 'bar' | 'hall' | 'kitchen';
 
 export interface DepartmentConfig {
   label: string;
@@ -85,6 +85,14 @@ export interface DepartmentConfig {
 }
 
 export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
+  bar_manager: {
+    label: 'Бар-менеджер',
+    icon: '⭐',
+    color: '#FFD538',
+    bgColor: 'bg-yellow-100',
+    textColor: 'text-yellow-800',
+    roles: ['бар-менеджер', 'барменеджер'],
+  },
   power: {
     label: 'Менеджер',
     icon: '👑',
@@ -92,7 +100,7 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
     bgColor: 'bg-amber-50',
     textColor: 'text-amber-800',
     // Точные названия должностей для этого отдела
-    roles: ['менеджер', 'барменеджер', 'бар-менеджер', 'управляющий', 'старший менеджер'],
+    roles: ['менеджер', 'управляющий', 'старший менеджер'],
   },
   bar: {
     label: 'Бар',

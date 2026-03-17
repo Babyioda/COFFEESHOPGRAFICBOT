@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ScheduleData, ShiftType, SHIFT_CONFIG, DEPARTMENT_CONFIG, Department, getDepartment } from '../types/schedule';
+import { getShiftEdit } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
 interface MonthViewProps {
@@ -91,10 +92,14 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
     const role = entry?.role || emp.role;
     if (shift === 'off') return;
     const dept = getDepartment(role) ?? emp.department ?? null;
+    // Получаем админские часы
+    const custom = getShiftEdit(emp.id, dateStr);
+    const customStart = custom?.customStart;
+    const customEnd = custom?.customEnd;
     if (shift === 'vacation' || shift === 'sick') {
       absent.push({ name: emp.name, role, color: emp.color, shift });
     } else {
-      working.push({ name: emp.name, role, color: emp.color, shift, dept });
+      working.push({ name: emp.name, role, color: emp.color, shift, dept, customStart, customEnd });
     }
   });
 
@@ -217,6 +222,12 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
                               <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>{w.role}</p>
+                              {/* Показываем актуальные часы, если заданы админом */}
+                              {(w.customStart || w.customEnd) && (
+                                <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 rounded px-1.5 ml-1">
+                                  {w.customStart ?? ''}{w.customStart && w.customEnd ? '–' : ''}{w.customEnd ?? ''}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -364,6 +375,17 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
             const myShift   = getMyShift(day);
             const isMyShift = myShift !== null && myShift !== 'off';
 
+            // Проверяем, есть ли у кого-то custom часы на этот день
+            let customHours = null;
+            if (hasShifts) {
+              const custom = data.shifts
+                .map(s => getShiftEdit(s.employeeId, dateStr))
+                .find(e => e && (e.customStart || e.customEnd));
+              if (custom) {
+                customHours = `${custom.customStart ?? ''}${custom.customStart && custom.customEnd ? '–' : ''}${custom.customEnd ?? ''}`;
+              }
+            }
+
             return (
               <button
                 key={day}
@@ -391,6 +413,12 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
                       borderColor: isDark ? '#0f172a' : '#ffffff',
                     }}
                   />
+                )}
+                {/* Показываем часы, если есть админские правки */}
+                {customHours && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-amber-600 bg-amber-50 rounded px-1.5 mt-0.5">
+                    {customHours}
+                  </span>
                 )}
               </button>
             );
