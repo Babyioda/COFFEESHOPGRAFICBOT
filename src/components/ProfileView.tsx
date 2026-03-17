@@ -227,7 +227,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   
   return (
     <div className="space-y-4 pb-6">
-      {renderDebugBlock()}
+      {/* debug block был удалён */}
       {/* Баннер ошибки синхронизации prefs */}
       {showSyncError && (
         <div className="rounded-xl p-3 mb-2 bg-red-100 border border-red-300 text-red-700 text-sm font-semibold flex items-center gap-2">
