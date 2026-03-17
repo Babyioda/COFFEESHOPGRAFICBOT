@@ -9,7 +9,11 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
+<<<<<<< HEAD
 import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId, getPrefsSyncError } from '../utils/adminEdits';
+=======
+import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
+>>>>>>> 511b105efc36a613461755ea086cf7d759ba5862
 import { fetchEmployeeNotes, testConnection, testFullFirebase } from '../utils/firebase';
 import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
 
