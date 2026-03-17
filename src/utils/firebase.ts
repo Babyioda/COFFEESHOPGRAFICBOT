@@ -21,6 +21,10 @@ export async function testFullFirebase(): Promise<TestResult[]> {
     employee_notes: { employeeId: 'test-emp-456', text: 'Employee test note', authorId: 'test-user' },
     shifts: { employeeId: 'test-emp-456', start: new Date(), visible: true },
     employee_rules: { employeeId: 'test-emp-456', hours: { start: '09:00', end: '17:00' }, authorId: 'test-user' },
+    emp_notes: { employeeId: 'test-emp-456', text: 'Test emp note', authorId: 'test-user' },
+    emp_prefs: { employeeId: 'test-emp-456', showTelegram: true, birthday: '01-01', customUsername: 'testuser' },
+    shift_edits: { shiftId: 'test-shift-123', editorId: 'test-user', changes: { field: 'value' } },
+    user_links: { uid: 'test-uid', empId: 'test-emp-456' },
   };
 
   for (const [collectionName, testPayload] of Object.entries(testData)) {
@@ -147,21 +151,31 @@ export async function testWriteReadDelete(collectionName: string = 'test_index_c
  * Тестовый запрос для искусственного вызова ошибки индексации Firestore
  */
 export async function testFirestoreIndexError() {
-  try {
-    // Выполнить сложный запрос, для которого скорее всего нет композитного индекса
-    // (замени 'shifts' и поля на реальные, если нужно)
-    const querySnapshot = await getDocs(
-      query(
-        collection(db, 'shifts'),
-        where('employeeId', '==', 'test-emp-456'),
-        orderBy('start')
-      )
-    );
-    console.log('[Firebase] Искусственный тест индексации: найдено документов:', querySnapshot.size);
-  } catch (err: any) {
-    console.error('[Firebase] Ожидаемая ошибка индексации Firestore:', err.code, err.message);
-    if (err.message && err.message.includes('index')) {
-      console.warn('[Firebase] Firestore требует создать композитный индекс. Это ожидаемая ошибка для теста.');
+  const indexTests = [
+    { collection: 'shifts',        whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'start' },
+    { collection: 'shift_notes',   whereField: 'shiftId',    whereValue: 'test-shift-123', orderField: 'createdAt' },
+    { collection: 'employee_notes',whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'createdAt' },
+    { collection: 'employee_rules',whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'authorId' },
+    { collection: 'emp_notes',     whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'authorId' },
+    { collection: 'emp_prefs',     whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'customUsername' },
+    { collection: 'shift_edits',   whereField: 'shiftId',    whereValue: 'test-shift-123', orderField: 'editorId' },
+    { collection: 'user_links',    whereField: 'empId',      whereValue: 'test-emp-456', orderField: 'uid' },
+  ];
+  for (const test of indexTests) {
+    try {
+      const querySnapshot = await getDocs(
+        query(
+          collection(db, test.collection),
+          where(test.whereField, '==', test.whereValue),
+          orderBy(test.orderField)
+        )
+      );
+      console.log(`[Firebase] Индексация: ${test.collection} — найдено документов:`, querySnapshot.size);
+    } catch (err: any) {
+      console.error(`[Firebase] Ожидаемая ошибка индексации Firestore в ${test.collection}:`, err.code, err.message);
+      if (err.message && err.message.includes('index')) {
+        console.warn(`[Firebase] Firestore требует создать композитный индекс для ${test.collection}. Это ожидаемая ошибка для теста.`);
+      }
     }
   }
 }

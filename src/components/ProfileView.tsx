@@ -1210,7 +1210,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               setSearchResults(findMatchingEmployees(data, e.target.value));
             }}
             placeholder="Иванов Иван..."
-            className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
+            className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-700 placeholder-gray-400'}`}
           />
           {searchResults.length > 0 && (
             <div className="mt-3 space-y-2">
