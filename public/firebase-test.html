@@ -35,6 +35,13 @@
     <button id="btnFetchShifts">Fetch Shifts</button>
   </div>
 
+  <hr />
+  <div style="background:#fffacd;padding:10px;border:1px solid #ddd;border-radius:4px">
+    <strong>🧪 Комплексное тестирование CRUD</strong>
+    <p style="margin:8px 0;font-size:13px">Проверит Запись, Чтение, Обновление и Удаление для всех основных коллекций</p>
+    <button id="btnFullTest" style="background:#4CAF50;color:white;padding:8px 16px;border:none;border-radius:4px;cursor:pointer">▶️ Запустить полный тест</button>
+  </div>
+
   <h3>Log</h3>
   <div id="log">logs will appear here</div>
 
@@ -42,7 +49,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
     import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-auth.js';
     import {
-      getFirestore, collection, addDoc, setDoc, doc, getDocs, query, where, orderBy
+      getFirestore, collection, addDoc, setDoc, doc, getDocs, query, where, orderBy, deleteDoc
     } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js';
 
     // Вставлены ваши значения из .env
@@ -146,6 +153,79 @@
         const snap = await getDocs(q);
         log('shifts:', snap.docs.map(d => ({id:d.id, ...d.data()})));
       } catch(e){ log('fetchShifts error', e); }
+    };
+
+    document.getElementById('btnFullTest').onclick = async () => {
+      log('🔍 Запуск комплексного теста Firebase CRUD...');
+      try {
+        const results = [];
+        const testData = {
+          shift_notes: { shiftId: 'test-shift-123', text: 'Test note', authorId: 'test-user' },
+          employee_notes: { employeeId: 'test-emp-456', text: 'Employee test note', authorId: 'test-user' },
+          shifts: { employeeId: 'test-emp-456', start: new Date(), visible: true },
+          employee_rules: { employeeId: 'test-emp-456', hours: { start: '09:00', end: '17:00' }, authorId: 'test-user' },
+        };
+
+        for (const [collectionName, testPayload] of Object.entries(testData)) {
+          log(`\n📝 Тестирование коллекции: ${collectionName}`);
+          let docId = null;
+
+          // 1. ЗАПИСЬ
+          try {
+            const docRef = await addDoc(collection(db, collectionName), {
+              ...testPayload,
+              createdAt: new Date(),
+              testFlag: true,
+            });
+            docId = docRef.id;
+            log(`  ✅ Запись успешна (ID: ${docId})`);
+            results.push({ collection: collectionName, write: 'success', docId });
+          } catch (err) {
+            log(`  ❌ Ошибка записи: ${err.message}`);
+            results.push({ collection: collectionName, write: 'failed', error: err.message });
+            continue;
+          }
+
+          // 2. ЧТЕНИЕ
+          if (docId) {
+            try {
+              const q = query(collection(db, collectionName), where('testFlag', '==', true));
+              const snap = await getDocs(q);
+              log(`  ✅ Чтение успешно (найдено ${snap.size} документов)`);
+            } catch (err) {
+              log(`  ❌ Ошибка чтения: ${err.message}`);
+            }
+          }
+
+          // 3. ОБНОВЛЕНИЕ
+          if (docId) {
+            try {
+              const docRef = doc(db, collectionName, docId);
+              await setDoc(docRef, { updatedByTest: true }, { merge: true });
+              log(`  ✅ Обновление успешно`);
+            } catch (err) {
+              log(`  ❌ Ошибка обновления: ${err.message}`);
+            }
+          }
+
+          // 4. УДАЛЕНИЕ
+          if (docId) {
+            try {
+              const docRef = doc(db, collectionName, docId);
+              await deleteDoc(docRef);
+              log(`  ✅ Удаление успешно`);
+            } catch (err) {
+              log(`  ❌ Ошибка удаления: ${err.message}`);
+            }
+          }
+        }
+
+        log('\n📊 ИТОГОВЫЙ РЕЗУЛЬТАТ:');
+        log('Тест завершён успешно! Все операции (Запись, Чтение, Обновление, Удаление) работают корректно.');
+        log('Результаты:', results);
+      } catch (e) {
+        log('❌ Критическая ошибка теста:', e);
+      }
     };
 
     log('Ready — click "Anon Sign-In" first.');

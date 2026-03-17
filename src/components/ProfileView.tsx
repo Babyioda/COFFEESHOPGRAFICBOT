@@ -10,7 +10,7 @@ import {
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
 import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
-import { fetchEmployeeNotes, testConnection } from '../utils/firebase';
+import { fetchEmployeeNotes, testConnection, testFullFirebase } from '../utils/firebase';
 import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -108,13 +108,11 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         'sf_tg_name',
       ];
       keys.forEach(k => localStorage.removeItem(k));
-      setLinkedEmpId(null); // сбросить привязку
-      onLinkedEmpChange(null); // уведомить родителя
-      setIsLinking(true); // показать экран авторизации
       if (tg && tg.showAlert) {
-        tg.showAlert('✅ Данные успешно очищены!\nВы вышли из аккаунта.', () => {});
+        tg.showAlert('✅ Данные успешно очищены!\nСтраница будет перезагружена.', () => window.location.reload());
       } else {
-        alert('✅ Данные успешно очищены!\nВы вышли из аккаунта.');
+        alert('✅ Данные успешно очищены!\nСтраница будет перезагружена.');
+        window.location.reload();
       }
     });
   };
@@ -225,9 +223,22 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const lbl  = isDark ? 'text-slate-100' : 'text-gray-900';
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
 
+  // Блок отладки
+  const renderDebugBlock = () => (
+    <div style={{ marginTop: 24, padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>🛠️ Отладка</div>
+      <button
+        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', marginBottom: 8 }}
+        onClick={handleClearLocalStorage}
+      >
+        Очистить все локальные данные
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-4 pb-6">
+      {renderDebugBlock()}
       {/* Тема */}
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
         <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🎨 Тема оформления</h3>
@@ -241,6 +252,16 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all active:scale-95 ${isDark ? 'bg-slate-600 text-slate-100 shadow-sm' : 'text-gray-400'}`}
           >🌙 Тёмная</button>
         </div>
+      </div>
+
+      {/* Очистка localStorage */}
+      <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
+        <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🧹 Очистить данные</h3>
+        <p className={`text-xs mb-3 ${sub}`}>Полностью удалить все локальные данные и привязки на этом устройстве.</p>
+        <button
+          onClick={handleClearLocalStorage}
+          className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-red-600"
+        >Очистить данные</button>
       </div>
 
       {/* Google Sheets — только администраторы */}
@@ -528,13 +549,16 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             <button
               onClick={async () => {
                 try {
-                  await testConnection();
-                  alert('Проверка отправлена в консоль');
-                } catch {}
+                  alert('🔍 Запускается комплексный тест Firebase (CRUD)...');
+                  const results = await testFullFirebase();
+                  alert(`✅ Тест завершён! Пройдено коллекций: ${results.filter(r => r.write.success && r.delete.success).length}/${results.length}. Подробности в консоли`);
+                } catch (e) {
+                  alert(`❌ Ошибка теста: ${e}`);
+                }
               }}
-              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-blue-500 hover:bg-blue-600 text-white"
             >
-              🔌 Тест Firebase
+              🧪 Полный CRUD тест Firebase
             </button>
           </div>
           <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>
@@ -1142,8 +1166,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   ];
 
   // ── Экран привязки ──
-  if (!linkedEmpId || !linkedEmp || isLinking) {
-    if (!isLinking) setIsLinking(true); // Гарантированно показать окно авторизации
+  if (!linkedEmp || isLinking) {
     return (
       <div className="space-y-4 pb-6">
         {/* Шапка */}
@@ -1178,7 +1201,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               setSearchResults(findMatchingEmployees(data, e.target.value));
             }}
             placeholder="Иванов Иван..."
-            className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-700 placeholder-gray-400'}`}
+            className={`w-full text-sm border rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
           />
           {searchResults.length > 0 && (
             <div className="mt-3 space-y-2">
@@ -1230,7 +1253,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 error={error} fakeDate={fakeDate}
                 onFakeDateChange={onFakeDateChange}
                 isAdmin={isAdmin}
-                onOpenAdminPanel={() => setShowAdminPanel(true)}
                 linkedEmp={null}
                 tgUser={tgUser}
                 tgId={tgId}
@@ -1251,23 +1273,32 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div className="w-full space-y-4 pb-6">
       {/* Шапка */}
-      <div className="rounded-2xl p-4 border shadow-sm flex items-center gap-3 mb-4" style={{ background: 'linear-gradient(90deg,#6366f1,#a5b4fc)' }}>
-        <img src={linkedEmp && linkedEmp.photoUrl ? linkedEmp.photoUrl : '/default-avatar.png'} alt="avatar" className="w-12 h-12 rounded-xl object-cover border-2 border-white" />
-        <div className="flex-1 min-w-0">
-          <h2 className="text-white text-xl font-bold truncate">Мой профиль</h2>
+      <div className="rounded-3xl overflow-hidden shadow-lg">
+        <div className="p-5 text-white" style={{ background: headerGradient }}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              {tgUser?.photo_url ? (
+                <div className="relative">
+                  <img src={tgUser.photo_url} alt="" className="w-16 h-16 rounded-2xl object-cover" />
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-400 rounded-full border-2 border-white" />
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-2xl font-extrabold shadow-inner">
+                  {linkedEmp.name.split(' ').map(p => p[0]).slice(0,2).join('')}
+                </div>
+              )}
+              <div>
+                <h2 className="font-extrabold text-xl leading-tight">{tgName ?? linkedEmp.name}</h2>
+                {tgName && tgName !== linkedEmp.name && <p className="text-white/60 text-xs">{linkedEmp.name}</p>}
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {deptCfg && <span className="text-xs font-semibold bg-white/20 rounded-full px-2 py-0.5">{deptCfg.icon} {deptCfg.label}</span>}
+                  <span className="text-xs bg-white/10 rounded-full px-2 py-0.5">{linkedEmp.role}</span>
+                </div>
+              </div>
+            </div>
+            {isAdmin && <button onClick={() => setIsLinking(true)} className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white/70 text-sm active:scale-95">✎</button>}
+          </div>
         </div>
-        {isAdmin && (
-          <button
-            className="w-8 h-8 rounded-full flex items-center justify-center bg-white/20 text-white hover:bg-white/30 transition-all active:scale-95"
-            title="Выйти из аккаунта"
-            onClick={() => {
-              handleClearLocalStorage();
-              if (typeof onUnlinkEmployee === 'function') onUnlinkEmployee();
-            }}
-          >
-            <span className="material-icons">edit</span>
-          </button>
-        )}
       </div>
 
       {/* Навигация — горизонтальная сетка */}

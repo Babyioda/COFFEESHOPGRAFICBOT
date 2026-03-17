@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./App";
-import { ensureAnonymousAuth, testConnection } from './utils/firebase';
+import { ensureAnonymousAuth, testConnection, testFullFirebase } from './utils/firebase';
 
 console.log('[Main] Starting app initialization...');
 
@@ -11,6 +11,10 @@ ensureAnonymousAuth().then(uid => {
   // Тестируем что можем читать из Firestore
   testConnection().catch(err => {
     console.error('[Main] Firebase test connection failed:', err);
+  });
+  // Запускаем полный CRUD тест в фоне
+  testFullFirebase().catch(err => {
+    console.error('[Main] Firebase full CRUD test failed:', err);
   });
   
   createRoot(document.getElementById("root")!).render(

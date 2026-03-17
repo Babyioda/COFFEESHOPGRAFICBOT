@@ -1,6 +1,125 @@
 /**
- * Расширенный тест Firestore: запись, чтение и удаление документа для проверки индексов и прав.
+ * Расширенный комплексный тест Firestore: запись, чтение, обновление и удаление документов
+ * для проверки всего функционала. Тестирует основные коллекции и операции CRUD.
  * Выводит подробные логи в консоль.
+ */
+export interface TestResult {
+  collection: string;
+  write: { success: boolean; error?: string; docId?: string };
+  read: { success: boolean; error?: string; docCount?: number };
+  update: { success: boolean; error?: string };
+  delete: { success: boolean; error?: string };
+  totalTime: number;
+}
+
+export async function testFullFirebase(): Promise<TestResult[]> {
+  console.log('🔍 [Firebase] Starting comprehensive CRUD test...');
+  
+  const results: TestResult[] = [];
+  const testData = {
+    shift_notes: { shiftId: 'test-shift-123', text: 'Test note', authorId: 'test-user' },
+    employee_notes: { employeeId: 'test-emp-456', text: 'Employee test note', authorId: 'test-user' },
+    shifts: { employeeId: 'test-emp-456', start: new Date(), visible: true },
+    employee_rules: { employeeId: 'test-emp-456', hours: { start: '09:00', end: '17:00' }, authorId: 'test-user' },
+  };
+
+  for (const [collectionName, testPayload] of Object.entries(testData)) {
+    const startTime = performance.now();
+    const result: TestResult = {
+      collection: collectionName,
+      write: { success: false },
+      read: { success: false },
+      update: { success: false },
+      delete: { success: false },
+      totalTime: 0,
+    };
+
+    let docId: string | null = null;
+
+    try {
+      // 1. ЗАПИСЬ (CREATE)
+      try {
+        console.log(`📝 [Firebase] Writing to ${collectionName}...`);
+        const docRef = await addDoc(collection(db, collectionName), {
+          ...testPayload,
+          createdAt: serverTimestamp(),
+          testFlag: true,
+        });
+        docId = docRef.id;
+        result.write = { success: true, docId };
+        console.log(`✅ [Firebase] ${collectionName}: Write successful (docId: ${docId})`);
+      } catch (err: any) {
+        result.write = { success: false, error: err.message };
+        console.error(`❌ [Firebase] ${collectionName}: Write failed - ${err.code}: ${err.message}`);
+      }
+
+      // 2. ЧТЕНИЕ (READ)
+      if (docId) {
+        try {
+          console.log(`📖 [Firebase] Reading from ${collectionName}...`);
+          const docSnapshot = await getDocs(
+            query(collection(db, collectionName), where('testFlag', '==', true))
+          );
+          result.read = { success: !docSnapshot.empty, docCount: docSnapshot.size };
+          console.log(
+            `✅ [Firebase] ${collectionName}: Read successful (found ${docSnapshot.size} test documents)`
+          );
+        } catch (err: any) {
+          result.read = { success: false, error: err.message };
+          console.error(`❌ [Firebase] ${collectionName}: Read failed - ${err.code}: ${err.message}`);
+        }
+      }
+
+      // 3. ОБНОВЛЕНИЕ (UPDATE)
+      if (docId) {
+        try {
+          console.log(`✏️ [Firebase] Updating ${collectionName}/${docId}...`);
+          const docRef = doc(db, collectionName, docId);
+          await updateDoc(docRef, {
+            updatedAt: serverTimestamp(),
+            testFlag: true,
+            updatedByTest: true,
+          });
+          result.update = { success: true };
+          console.log(`✅ [Firebase] ${collectionName}: Update successful`);
+        } catch (err: any) {
+          result.update = { success: false, error: err.message };
+          console.error(`❌ [Firebase] ${collectionName}: Update failed - ${err.code}: ${err.message}`);
+        }
+      }
+
+      // 4. УДАЛЕНИЕ (DELETE)
+      if (docId) {
+        try {
+          console.log(`🗑️ [Firebase] Deleting ${collectionName}/${docId}...`);
+          const docRef = doc(db, collectionName, docId);
+          await deleteDoc(docRef);
+          result.delete = { success: true };
+          console.log(`✅ [Firebase] ${collectionName}: Delete successful`);
+        } catch (err: any) {
+          result.delete = { success: false, error: err.message };
+          console.error(`❌ [Firebase] ${collectionName}: Delete failed - ${err.code}: ${err.message}`);
+        }
+      }
+    } catch (err: any) {
+      console.error(`❌ [Firebase] Unexpected error in ${collectionName}:`, err);
+    }
+
+    result.totalTime = performance.now() - startTime;
+    results.push(result);
+  }
+
+  // Summary
+  const passed = results.filter(r => r.write.success && r.read.success && r.delete.success).length;
+  const total = results.length;
+  console.log(`\n📊 [Firebase] Test Summary: ${passed}/${total} collections passed all tests`);
+  console.log('[Firebase] Detailed Results:', results);
+
+  return results;
+}
+
+/**
+ * Старая функция тестирования (оставлена для совместимости)
  */
 export async function testWriteReadDelete(collectionName: string = 'test_index_check') {
   const testId = 'test_doc_' + Math.floor(Math.random() * 1000000);

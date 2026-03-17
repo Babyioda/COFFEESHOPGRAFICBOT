@@ -538,13 +538,16 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
             <button
               onClick={async () => {
                 try {
-                  await testConnection();
-                  alert('Проверка отправлена в консоль');
-                } catch {}
+                  alert('🔍 Запускается комплексный тест Firebase (CRUD)...');
+                  const results = await testFullFirebase();
+                  alert(`✅ Тест завершён! Пройдено коллекций: ${results.filter(r => r.write.success && r.delete.success).length}/${results.length}. Подробности в консоли`);
+                } catch (e) {
+                  alert(`❌ Ошибка теста: ${e}`);
+                }
               }}
-              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-gray-500 hover:bg-gray-600 text-white"
+              className="py-2.5 rounded-xl font-semibold text-sm active:scale-95 transition-all bg-blue-500 hover:bg-blue-600 text-white"
             >
-              🔌 Тест Firebase
+              🧪 Полный CRUD тест Firebase
             </button>
           </div>
           <p className={`text-xs mt-2 ${sub}`}>Скопируйте отладку и отправьте в чат @milkaaasss</p>

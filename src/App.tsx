@@ -291,10 +291,8 @@ function AppInner() {
 
 
   const TABS: { id: TabId; label: string; icon: string }[] = [
-    { id: 'shifts', label: 'Смены', icon: '📅' },
+    { id: 'shifts',  label: 'Смены',   icon: '📅' },
     { id: 'profile', label: 'Профиль', icon: '👤' },
-    { id: 'reports', label: 'Отчёты', icon: '📊' },
-    { id: 'settings', label: 'Настройки', icon: '⚙️' },
   ];
 
   const bgPage   = isDark ? 'bg-slate-900' : 'bg-slate-100';
