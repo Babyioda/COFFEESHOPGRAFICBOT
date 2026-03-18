@@ -76,9 +76,9 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
     ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[headerDept]
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
 
-  const tgUsername = (emp as Employee & { tgUsername?: string }).tgUsername;
+  const tgUsername = getEmpPrefs(emp.id)?.tgUsername || '';
   const showTelegramPref = emp.showTelegram ?? getEmpPrefs(emp.id)?.showTelegram ?? false;
-  const tgError = showTelegramPref && !tgUsername ? 'Telegram username не указан' : '';
+  const tgError = showTelegramPref && !tgUsername ? 'Telegram не указан администратором' : '';
 
   const CAL_CELL: Record<ShiftType, string> = isDark ? {
     daily:    'bg-violet-900/40 border-violet-600 text-violet-300',

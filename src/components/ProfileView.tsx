@@ -9,9 +9,9 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote, getEmpRule, saveEmpRule, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId, getPrefsSyncError } from '../utils/adminEdits';
-import { fetchEmployeeNotes, testConnection, testFullFirebase, testFirestoreIndexError } from '../utils/firebase';
-import { watchEmpPrefs, watchEmpRules, watchEmpNotes } from '../utils/firebase';
+import { saveEmpNote, getEmpNote, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
+import { fetchEmployeeNotes, testFullFirebase, testFirestoreIndexError } from '../utils/firebase';
+import { watchEmpPrefs, watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
@@ -77,12 +77,10 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
   const [copyingDebug, setCopyingDebug] = useState(false);
-  const [showSyncError, setShowSyncError] = useState(false);
+  // showSyncError monitoring removed
 
   // preferences for linked employee
-  const [showTelegramPref, setShowTelegramPref] = useState(false);
   const [birthdayInput, setBirthdayInput] = useState(''); // yyyy-mm-dd
-  const [manualUsername, setManualUsername] = useState(''); // manually entered @username
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Очистка localStorage
@@ -131,17 +129,10 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         try {
           const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
           console.log('[ProfileView] Firebase prefs updated:', { empId: linkedEmp.id, prefs: p });
-          setShowTelegramPref(!!p.showTelegram);
           if (p.birthday) {
             setBirthdayInput(`2000-${p.birthday}`);
           } else {
             setBirthdayInput('');
-          }
-          if (p.customUsername) {
-            console.log('[ProfileView] Loaded customUsername from Firebase:', p.customUsername);
-            setManualUsername(p.customUsername);
-          } else {
-            setManualUsername('');
           }
           setPrefsLoaded(true);
         } catch (err) {
@@ -150,21 +141,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         }
       });
       unsubscribers.push(unsubPrefs);
-
-      // Подписка на employee rules (часы работы)
-      const unsubRules = watchEmpRules((allRules) => {
-        try {
-          const rule = allRules.find(r => r.empId === linkedEmp.id);
-          if (rule && rule.hours) {
-            console.log('[ProfileView] Rules updated for:', linkedEmp.id);
-            // Можно добавить setRuleStart/ruleEnd если нужно live-отображение
-            // setRuleStart(rule.hours.start); setRuleEnd(rule.hours.end);
-          }
-        } catch (err) {
-          console.error('[ProfileView] Error processing rules:', err);
-        }
-      });
-      unsubscribers.push(unsubRules);
 
       // Подписка на employee notes (заметки)
       const unsubNotes = watchEmpNotes((allNotes) => {
@@ -228,12 +204,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   return (
     <div className="space-y-4 pb-6">
       {/* debug block был удалён */}
-      {/* Баннер ошибки синхронизации prefs */}
-      {showSyncError && (
-        <div className="rounded-xl p-3 mb-2 bg-red-100 border border-red-300 text-red-700 text-sm font-semibold flex items-center gap-2">
-          <span>⚠️ Ошибка синхронизации настроек! Изменения могут не сохраниться. Проверьте соединение с интернетом или попробуйте очистить данные.</span>
-        </div>
-      )}
+      {/* Баннер ошибки синхронизации prefs удалён */}
       {/* Тема */}
       <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>
         <h3 className={`font-bold text-sm mb-3 ${lbl}`}>🎨 Тема оформления</h3>
@@ -380,47 +351,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           <h3 className={`font-bold text-sm mb-3 ${lbl}`}>⚙️ Личные настройки</h3>
           <div className="space-y-3">
             <div>
-              <label className={`flex items-center gap-2 ${lbl}`}>
-                <input
-                  type="checkbox"
-                  checked={showTelegramPref}
-                  onChange={e => {
-                    setShowTelegramPref(e.target.checked);
-                  }}
-                />
-                Показывать мой Telegram
-              </label>
-              {showTelegramPref && linkedEmp && !linkedEmp.tgUsername && !manualUsername && (
-                <p className="text-xs text-amber-500 mt-1">⚠️ Нужен @username (найди в параметрах профиля Telegram или добавь ниже)</p>
-              )}
-            </div>
-
-            {/* Manual username input */}
-            <div>
-              <label className={`text-xs font-semibold mb-1.5 block ${sub}`}>
-                @username {linkedEmp.tgUsername && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{backgroundColor: '#059669', color: 'white'}}>✓ из Telegram</span>}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={manualUsername}
-                  onChange={e => setManualUsername(e.target.value.replace(/^@/, '').trim())}
-                  placeholder="myusername"
-                  className={`flex-1 text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${inp}`}
-                />
-                {manualUsername && (
-                  <button
-                    onClick={() => setManualUsername('')}
-                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-red-500/20 text-red-500 flex items-center justify-center text-sm font-bold"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <p className="text-[10px] text-gray-500 mt-1">Если @username не в профиле Telegram, добавь его сюда вручную</p>
-            </div>
-
-            <div>
               <label className={`text-xs font-semibold mb-1 block ${sub}`}>День рождения</label>
               <input
                 type="date"
@@ -435,35 +365,19 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
                 if (!linkedEmp) return;
                 try {
                   const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
-                  // Check if Telegram is enabled and if we have a username (either from TG or manually entered)
-                  const hasUsername = linkedEmp.tgUsername || manualUsername;
-                  if (showTelegramPref && !hasUsername) {
-                    console.warn('[ProfileView] Cannot enable Telegram: no username provided');
-                    // Let user correct it - don't return, just show warning
-                    // They can still save birthday
-                    if (manualUsername === '' && !linkedEmp.tgUsername) {
-                      alert('⚠️ Telegram включен но нет @username. Найдите его в параметрах профиля Telegram или добавьте вручную.');
-                      return;
-                    }
-                  }
                   
                   console.log('[ProfileView] Saving employee prefs...', { 
                     empId: linkedEmp.id, 
-                    showTelegram: showTelegramPref, 
                     birthday: mmdd,
-                    customUsername: manualUsername || undefined
                   });
                   
                   // Save to both localStorage and Firebase
                   saveEmpPrefs({ 
                     empId: linkedEmp.id, 
-                    showTelegram: showTelegramPref, 
                     birthday: mmdd,
-                    customUsername: manualUsername || undefined,
                   });
                   
                   // Update object for immediate effect
-                  linkedEmp.showTelegram = showTelegramPref;
                   linkedEmp.birthday = mmdd;
                   if (updateEmployee) {
                     updateEmployee({...linkedEmp});
@@ -588,20 +502,19 @@ interface AdminPanelProps {
   error?: string | null;
   onRefresh?: () => void;
   onEmployeeUpdate?: (emp: Employee) => void;
+  isAdmin?: boolean;
 }
-const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoading, error, onRefresh, onEmployeeUpdate }) => {
+const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoading, error, onRefresh, onEmployeeUpdate, isAdmin = false }) => {
   const { isDark } = useTheme();
   const [activeDept, setActiveDept] = useState<Department | 'all'>('all');
 
   // state for editing notes via admin panel
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
   const [noteText, setNoteText] = useState('');
-  const [editTab, setEditTab] = useState<'notes' | 'rules'>('notes');
-  const [ruleStart, setRuleStart] = useState('08:00');
-  const [ruleEnd, setRuleEnd] = useState('20:00');
 
   // admin prefs for employee
   const [adminShowTelegram, setAdminShowTelegram] = useState(false);
+  const [adminTelegramUsername, setAdminTelegramUsername] = useState('');
   const [adminBirthdayInput, setAdminBirthdayInput] = useState('');
 
   useEffect(() => {
@@ -612,19 +525,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
       if (emp) {
         setEditingEmp(emp);
         setNoteText(getEmpNote(emp.id));
-        const rule = getEmpRule(emp.id);
-        if (rule) {
-          setRuleStart(rule.start);
-          setRuleEnd(rule.end);
-        } else {
-          setRuleStart('08:00');
-          setRuleEnd('20:00');
-        }
         // load prefs
         const p = getEmpPrefs(emp.id) || {} as any;
         setAdminShowTelegram(!!p.showTelegram);
+        setAdminTelegramUsername(p.tgUsername || '');
         setAdminBirthdayInput(p.birthday ? `2000-${p.birthday}` : '');
-        setEditTab('notes');
       }
     };
     window.addEventListener('open-emp-editor', handler as EventListener);
@@ -776,28 +681,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                 <button onClick={() => setEditingEmp(null)} className={`w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold ${isDark ? 'bg-slate-800 text-slate-400' : 'bg-gray-100 text-gray-500'}`}>×</button>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setEditTab('notes')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    editTab === 'notes'
-                      ? 'bg-indigo-500 text-white'
-                      : isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  💬 Примечание
-                </button>
-                <button
-                  onClick={() => setEditTab('rules')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    editTab === 'rules'
-                      ? 'bg-indigo-500 text-white'
-                      : isDark ? 'bg-slate-700 text-slate-400' : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  ⏰ Правило (часы)
-                </button>
                 {/* Кнопка удаления заметок только для админов и только на вкладке заметки */}
-                {isAdmin && editTab === 'notes' && (
+                {isAdmin && (
                   <button
                     onClick={async () => {
                       if (!editingEmp) return;
@@ -818,49 +703,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
               </div>
             </div>
             <div className="px-5 py-4">
-              {editTab === 'notes' ? (
-                <>
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    💬 Примечание к сотруднику
-                  </p>
-                  <textarea
-                    value={noteText}
-                    onChange={e => setNoteText(e.target.value)}
-                    placeholder="Например: работает 0.5 ставки, особые условия..."
-                    rows={4}
-                    className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
-                  />
-                </>
-              ) : (
-                <>
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-3 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
-                    ⏰ Часы работы
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>От (начало)</label>
-                      <input
-                        type="time"
-                        value={ruleStart}
-                        onChange={e => setRuleStart(e.target.value)}
-                        className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>До (конец)</label>
-                      <input
-                        type="time"
-                        value={ruleEnd}
-                        onChange={e => setRuleEnd(e.target.value)}
-                        className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
-                      />
-                    </div>
-                    <div className={`p-3 rounded-xl text-xs ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-blue-50 text-blue-700'}`}>
-                      ℹ️ Эти часы будут автоматически применяться ко всем сменам этого сотрудника
-                    </div>
-                  </div>
-                </>
-              )}
+              <>
+                <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
+                  💬 Примечание к сотруднику
+                </p>
+                <textarea
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  placeholder="Например: работает 0.5 ставки, особые условия..."
+                  rows={4}
+                  className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
+                />
+              </>
               {/* admin prefs always visible */}
               {editingEmp && (
                 <div className="mt-4 space-y-3">
@@ -876,7 +730,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                     </label>
                   </div>
                   <div>
-                    <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>День рождения</label>
+                    <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>@Telegram username</label>
+                    <input
+                      type="text"
+                      value={adminTelegramUsername}
+                      onChange={e => setAdminTelegramUsername(e.target.value.replace(/^@/, '').trim())}
+                      placeholder="example"
+                      className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1">Без символа @, ссылка будет t.me/{adminTelegramUsername}</p>
+                  </div>
+                  <div>
                     <input
                       type="date"
                       value={adminBirthdayInput}
@@ -898,14 +762,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
               <button
                 onClick={() => {
                   if (editingEmp) {
-                    if (editTab === 'notes') {
-                      saveEmpNote(editingEmp.id, noteText);
-                    } else {
-                      saveEmpRule(editingEmp.id, { start: ruleStart, end: ruleEnd });
-                    }
+                    saveEmpNote(editingEmp.id, noteText);
                     // save admin prefs as well
                     const mmdd = adminBirthdayInput ? adminBirthdayInput.slice(5) : '';
-                    saveEmpPrefs({ empId: editingEmp.id, showTelegram: adminShowTelegram, birthday: mmdd });
+                    saveEmpPrefs({ 
+                      empId: editingEmp.id, 
+                      showTelegram: adminShowTelegram, 
+                      tgUsername: adminTelegramUsername || undefined,
+                      birthday: mmdd 
+                    });
                     editingEmp.showTelegram = adminShowTelegram;
                     editingEmp.birthday = mmdd;
                     const upd = onEmployeeUpdate;
@@ -1392,6 +1257,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           error={error}
           onRefresh={onRefresh}
           onEmployeeUpdate={onEmployeeUpdate}
+          isAdmin={isAdmin}
         />
       )}
 

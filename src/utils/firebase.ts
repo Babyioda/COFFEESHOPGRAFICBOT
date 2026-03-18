@@ -20,7 +20,7 @@ export async function testFullFirebase(): Promise<TestResult[]> {
     shift_notes: { shiftId: 'test-shift-123', text: 'Test note', authorId: 'test-user' },
     employee_notes: { employeeId: 'test-emp-456', text: 'Employee test note', authorId: 'test-user' },
     shifts: { employeeId: 'test-emp-456', start: new Date(), visible: true },
-    emp_rules: { employeeId: 'test-emp-456', hours: { start: '09:00', end: '17:00' }, authorId: 'test-user' },
+
     emp_notes: { employeeId: 'test-emp-456', text: 'Test emp note', authorId: 'test-user' },
     emp_prefs: { employeeId: 'test-emp-456', showTelegram: true, birthday: '01-01', customUsername: 'testuser' },
     shift_edits: { shiftId: 'test-shift-123', editorId: 'test-user', changes: { field: 'value' } },
@@ -155,7 +155,7 @@ export async function testFirestoreIndexError() {
     { collection: 'shifts',        whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'start' },
     { collection: 'shift_notes',   whereField: 'shiftId',    whereValue: 'test-shift-123', orderField: 'createdAt' },
     { collection: 'employee_notes',whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'createdAt' },
-    { collection: 'emp_rules',whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'authorId' },
+
     { collection: 'emp_notes',     whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'authorId' },
     { collection: 'emp_prefs',     whereField: 'employeeId', whereValue: 'test-emp-456', orderField: 'customUsername' },
     { collection: 'shift_edits',   whereField: 'shiftId',    whereValue: 'test-shift-123', orderField: 'editorId' },
@@ -295,11 +295,9 @@ export async function testConnection(): Promise<void> {
     const collections_to_test = [
       'employee_notes',
       'shift_notes',
-      'emp_rules',
       'shifts',
       'shift_edits',
       'emp_notes',
-      'emp_rules',
       'emp_prefs',
       'user_links'
     ];
@@ -691,42 +689,7 @@ export async function fetchEmpNotes(): Promise<EmpNoteDoc[]> {
   }
 }
 
-// ======== Employee Rules (synchronized from localStorage) ========
-interface EmpRuleDoc {
-  empId: string;
-  hours: { start: string; end: string };
-  updatedAt?: any;
-}
-
-export async function setEmpRule(empId: string, hours: { start: string; end: string }): Promise<void> {
-  try {
-    const docRef = doc(db, 'emp_rules', empId);
-    if (hours.start === '' || hours.end === '') {
-      await deleteDoc(docRef);
-      console.log('[Firebase] Employee rule deleted:', empId);
-    } else {
-      await setDoc(docRef, {
-        empId,
-        hours,
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-      console.log('[Firebase] Employee rule saved:', empId);
-    }
-  } catch (err) {
-    console.error('[Firebase] Failed to save employee rule:', err);
-    throw err;
-  }
-}
-
-export async function fetchEmpRules(): Promise<EmpRuleDoc[]> {
-  try {
-    const snap = await getDocs(collection(db, 'emp_rules'));
-    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpRuleDoc));
-  } catch (err) {
-    console.error('[Firebase] Failed to fetch employee rules:', err);
-    return [];
-  }
-}
+// Employee Rules removed - use only Employee Preferences instead
 
 // ======== Employee Preferences (Telegram visibility + Birthday + Username) ========
 export interface EmpPrefsDoc {
@@ -836,26 +799,7 @@ export function watchEmpNotes(cb: (items: EmpNoteDoc[]) => void) {
   }
 }
 
-// Реалтайм слушатель для правил (emp_rules)
-export function watchEmpRules(cb: (items: EmpRuleDoc[]) => void) {
-  try {
-    return onSnapshot(collection(db, 'emp_rules'), (snap: any) => {
-      const rules = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpRuleDoc));
-      console.log('[Firebase] Watch emp_rules updated:', rules.length, 'items');
-      cb(rules);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for emp_rules:', err.code, err.message);
-      if (err.code === 'permission-denied') {
-        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_rules collection needs read access.');
-      }
-      // Still call callback with empty array to avoid breaking UI
-      cb([]);
-    });
-  } catch (err) {
-    console.error('[Firebase] Failed to set up watch for emp_rules:', err);
-    return () => {};
-  }
-}
+
 
 // Реалтайм слушатель для дней рождения и Telegram (emp_prefs)
 export function watchEmpPrefs(cb: (items: EmpPrefsDoc[]) => void) {

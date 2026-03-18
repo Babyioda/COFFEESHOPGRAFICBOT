@@ -4,8 +4,8 @@ import {
   DEPARTMENT_CONFIG, Department, getDepartment, Employee,
 } from '../types/schedule';
 import { useTheme } from '../context/ThemeContext';
-import { getShiftEdit, saveShiftEdit, deleteShiftEdit, getEmpRule } from '../utils/adminEdits';
-import { watchAllShiftNotes, watchEmpNotes, watchEmpRules, watchShiftEdits } from '../utils/firebase';
+import { getShiftEdit, saveShiftEdit, deleteShiftEdit } from '../utils/adminEdits';
+import { watchAllShiftNotes, watchEmpNotes, watchShiftEdits } from '../utils/firebase';
 
 const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTHS_RU_FULL = [
@@ -389,7 +389,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
     }
   });
 
-  const byDept: Record<Department, typeof working> = { power:[], bar:[], hall:[], kitchen:[] };
+  const byDept: Record<Department, typeof working> = { bar_manager: [], power:[], bar:[], hall:[], kitchen:[] };
   working.forEach(w => { byDept[w.dept].push(w); });
 
   type ByShift = Partial<Record<ShiftType, typeof working>>;
@@ -705,7 +705,7 @@ interface ColleagueSelectorProps {
   onToggle: (id: string) => void;
   onClose: () => void;
 }
-const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId, selectedIds, friendIds, isAdmin, onToggle, onClose }) => {
+const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId, selectedIds, friendIds, onToggle, onClose }) => {
   const { isDark } = useTheme();
   const [search, setSearch] = useState('');
 
@@ -718,7 +718,7 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
   const friends    = allEmps.filter(e => friendIds.includes(e.id));
   const nonFriends = allEmps.filter(e => !friendIds.includes(e.id));
 
-  const byDept: Record<Department, Employee[]> = { power:[], bar:[], hall:[], kitchen:[] };
+  const byDept: Record<Department, Employee[]> = { bar_manager: [], power:[], bar:[], hall:[], kitchen:[] };
   nonFriends.forEach(emp => {
     const dept = emp.department ?? getDepartment(emp.role) ?? 'kitchen';
     byDept[dept].push(emp);
@@ -873,10 +873,6 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
     return data.shifts.find(s => s.employeeId === empId && s.date === dateStr);
   };
 
-  const getShift = (empId: string, day: number): ShiftType => {
-    return getShiftEntry(empId, day)?.shift ?? 'off';
-  };
-
   const getShiftsForDay = (day: number): ShiftType[] => {
     const dateStr = formatDate(year, month, day);
     return data.shifts
@@ -988,11 +984,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
             // Кастомное время для моей смены
             const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
-            const myRule      = linkedEmp ? getEmpRule(linkedEmp.id) : null;
             
-            let myTimeStart = myCustom?.customStart ?? myRule?.start ?? myTimes?.start;
-            let myTimeEnd   = myCustom?.customEnd   ?? myRule?.end   ?? myTimes?.end;
-            // const isCustomTime = !!myCustom || !!myRule;
+            let myTimeStart = myCustom?.customStart ?? myTimes?.start;
+            let myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
             let myShortTime: string | undefined = undefined;
             if (myHours) {
               myShortTime = `${myHours}ч`;
@@ -1010,9 +1004,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               const cEntry = data.shifts.find(s => s.employeeId === cId && s.date === dateStr);
               const cShift = cEntry?.shift ?? 'off';
               const cHours = cEntry?.hours;
-              const cRule  = getEmpRule(cId);
               const color  = getColleagueColorForDay(cEmp, data, dateStr);
-              return { shift: cShift, emp: cEmp, color, hours: cHours, rule: cRule };
+              const cCustom = getShiftEdit(cId, dateStr);
+              return { shift: cShift, emp: cEmp, color, hours: cHours, customStart: cCustom?.customStart, customEnd: cCustom?.customEnd };
             }).filter((c): c is NonNullable<typeof c> => c !== null && (c.shift !== 'off' || !!c.hours));
 
             const hasColleague = colleagueShifts.length > 0;
@@ -1088,11 +1082,13 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                       <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                         {colleagueShifts.map((c, i) => {
                           const cTimes = SHIFT_TIMES[c.shift];
+                          const timeStart = c.customStart ?? cTimes?.start;
+                          const timeEnd = c.customEnd ?? cTimes?.end;
                           let text: string | undefined;
                           if (c.hours) {
                             text = `${c.hours}ч`;
-                          } else if (c.rule) {
-                            text = formatHourLabel(c.rule.start, c.rule.end) || cTimes?.short;
+                          } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {
+                            text = formatHourLabel(timeStart, timeEnd);
                           } else {
                             text = cTimes?.short;
                           }
@@ -1118,11 +1114,13 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                   <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                     {colleagueShifts.map((c, i) => {
                       const cTimes = SHIFT_TIMES[c.shift];
+                      const timeStart = c.customStart ?? cTimes?.start;
+                      const timeEnd = c.customEnd ?? cTimes?.end;
                       let text: string | undefined;
                       if (c.hours) {
                         text = `${c.hours}ч`;
-                      } else if (c.rule) {
-                        text = formatHourLabel(c.rule.start, c.rule.end) || cTimes?.short;
+                      } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {
+                        text = formatHourLabel(timeStart, timeEnd);
                       } else {
                         text = cTimes?.short;
                       }

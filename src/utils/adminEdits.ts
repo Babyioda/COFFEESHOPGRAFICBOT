@@ -13,17 +13,8 @@ export interface EmpNote {
   note: string;          // постоянное примечание к сотруднику
 }
 
-export interface EmpRule {
-  empId: string;
-  hours: {
-    start: string;       // "08:00"
-    end: string;         // "20:00"
-  };
-}
-
 const STORAGE_SHIFT_EDITS = 'sf_admin_shift_edits';
 const STORAGE_EMP_NOTES   = 'sf_admin_emp_notes';
-const STORAGE_EMP_RULES   = 'sf_admin_emp_rules';
 const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
 const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
 
@@ -34,7 +25,7 @@ export function loadShiftEdits(): ShiftEdit[] {
   catch { return []; }
 }
 
-import { addShiftNote, addEmployeeNote, setShiftEdit, setEmpNote, setEmpRule, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
+import { addShiftNote, setShiftEdit, setEmpNote, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
 
 export function saveShiftEdit(edit: ShiftEdit): void {
   console.log('[AdminEdits] Saving shift edit to Firebase:', { empId: edit.empId, date: edit.date });
@@ -122,35 +113,13 @@ export function getEmpNote(empId: string): string {
   return loadEmpNotes().find(e => e.empId === empId)?.note ?? '';
 }
 
-// ── Правила сотрудников ──────────────────────────────────────────
-
-export function loadEmpRules(): EmpRule[] {
-  try { return JSON.parse(localStorage.getItem(STORAGE_EMP_RULES) || '[]'); }
-  catch { return []; }
-}
-
-export function saveEmpRule(empId: string, hours: { start: string; end: string }): void {
-  console.log('[AdminEdits] Saving employee rule to Firebase:', { empId, start: hours.start, end: hours.end });
-  
-  // Save to Firebase first (primary source)
-  setEmpRule(empId, hours).then(() => {
-    console.log('[AdminEdits] Employee rule saved to Firebase successfully');
-  }).catch((err) => {
-    console.error('[AdminEdits] Failed to save employee rule to Firebase:', err);
-    alert('❌ Не удалось сохранить правило в Firebase. Проверьте соединение.');
-  });
-}
-
-export function getEmpRule(empId: string): { start: string; end: string } | null {
-  return loadEmpRules().find(e => e.empId === empId)?.hours ?? null;
-}
-
 // ======== User preferences (Telegram visibility, birthday) ========
 export interface EmpPrefs {
   empId: string;
   showTelegram?: boolean;
-  birthday?: string; // MM-DD
-  customUsername?: string; // manually entered @username
+  tgUsername?: string;    // Telegram username set by admin
+  birthday?: string;      // MM-DD
+  customUsername?: string; // DEPRECATED: manually entered @username (kept for backwards compatibility)
 }
 
 const STORAGE_EMP_PREFS = 'sf_emp_prefs';
