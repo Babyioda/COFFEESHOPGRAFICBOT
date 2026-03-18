@@ -45,16 +45,13 @@ function getDeptColorByRole(role: string, fallback = '#6366f1'): string {
   return dept ? DEPARTMENT_CONFIG[dept].color : fallback;
 }
 
-// format hours into compact "00-00" label; input like "08:00" -> "08" etc
+// format hours into compact "00-00" label; input like "08:00" -> "08-00" etc
 function formatHourLabel(start?: string, end?: string): string | undefined {
   if (!start || !end) return undefined;
-  const s = start.slice(0,5).replace(':', '');
-  const e = end.slice(0,5).replace(':', '');
-  let lbl = `${s}-${e}`;
-  return lbl
-    .replace('0800-0800', '08-08')
-    .replace('0800-2000', '08-20')
-    .replace('2000-0800', '20-08');
+  // Получаем часы и минуты из "HH:MM"
+  const s = start.slice(0, 2);  // "20:05" -> "20"
+  const e = end.slice(0, 2);    // "08:00" -> "08"
+  return `${s}-${e}`;
 }
 
 function getColleagueColorForDay(emp: Employee, data: ScheduleData, dateStr: string): string {
@@ -352,11 +349,14 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
   const working: {
     emp: Employee; name: string; role: string; color: string;
     shift: ShiftType; dept: Department; isMe: boolean; hours?: number;
+    multipleShifts?: Array<{ dept: Department; hours: number }>;
+    startTime?: string; endTime?: string;
     birthday?: boolean;
   }[] = [];
   const absent: {
     emp: Employee; name: string; role: string; color: string;
     shift: ShiftType; isMe: boolean; hours?: number;
+    multipleShifts?: Array<{ dept: Department; hours: number }>;
     birthday?: boolean;
   }[] = [];
 
@@ -364,14 +364,49 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
     const entry = data.shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
     const shift: ShiftType = entry?.shift ?? 'off';
     const hours = entry?.hours;
+    const multipleShifts = entry?.multipleShifts;
+    const shiftsWithTimes = entry?.shiftsWithTimes;
     const role = entry?.role || emp.role;
     // Если нет смены и нет отработанных часов — пропускаем
-    if (shift === 'off' && !hours) return;
+    if (shift === 'off' && !hours && !multipleShifts && !shiftsWithTimes) return;
     const color = getDeptColorByRole(role, emp.color);
     const dept = getDepartment(role) ?? emp.department ?? 'kitchen';
     const isMe = emp.id === linkedEmpId;
+    
     if (shift === 'vacation' || shift === 'sick') {
-      absent.push({ emp, name: emp.name, role, color, shift, isMe, hours });
+      absent.push({ emp, name: emp.name, role, color, shift, isMe, hours, multipleShifts });
+    } else if (shiftsWithTimes && shiftsWithTimes.length > 0) {
+      // Если есть смены с временем, добавляем отдельную запись для каждой
+      for (const swt of shiftsWithTimes) {
+        const deptCfg = DEPARTMENT_CONFIG[swt.dept];
+        working.push({
+          emp,
+          name: emp.name,
+          role: swt.role,
+          color: deptCfg.color,
+          shift: 'off',
+          dept: swt.dept,
+          isMe,
+          startTime: swt.startTime,
+          endTime: swt.endTime,
+        });
+      }
+    } else if (multipleShifts && multipleShifts.length > 0) {
+      // Если есть несколько смен по часам, добавляем отдельную запись для каждой
+      for (const ms of multipleShifts) {
+        const deptCfg = DEPARTMENT_CONFIG[ms.dept];
+        const roleForShift = emp.roles?.find(r => getDepartment(r) === ms.dept) || role;
+        working.push({
+          emp,
+          name: emp.name,
+          role: roleForShift,
+          color: deptCfg.color,
+          shift: 'off',
+          dept: ms.dept,
+          isMe,
+          hours: ms.hours,
+        });
+      }
     } else {
       working.push({ emp, name: emp.name, role, color, shift, dept, isMe, hours });
     }
@@ -502,7 +537,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                                     )}
                                     {hasCustomTime && (
                                       <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                                        {timeStart}–{timeEnd}
+                                        {timeStart?.slice(0, 2)}–{timeEnd?.slice(0, 2)}
                                       </span>
                                     )}
                                     {workedHours && (
@@ -598,17 +633,19 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                     </div>
                   )}
                   {/* Дополнительная секция для записей, где есть только часы (shift==='off') */}
-                  {group.filter(w => w.shift === 'off' && w.hours).length > 0 && (
+                  {group.filter(w => w.shift === 'off' && (w.hours || w.startTime)).length > 0 && (
                     <div key="hours">
-                      <div className={`px-4 py-1.5 flex items-center gap-2 bg-amber-100`}> 
+                      <div className={`px-4 py-1.5 flex items-center gap-2 ${isDark ? 'bg-amber-900/60' : 'bg-amber-600'}`}> 
                         <span className="text-sm">⏱️</span>
-                        <span className="text-xs font-semibold">Часы</span>
+                        <span className={`text-xs font-semibold ${isDark ? 'text-amber-200' : 'text-white'}`}>Часы</span>
                       </div>
                       <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-gray-50'}`}>
-                        {group.filter(w => w.shift === 'off' && w.hours).map((w, i) => {
+                        {group.filter(w => w.shift === 'off' && (w.hours || w.startTime)).map((w, i) => {
                           const workedHours = w.hours;
                           const empNote = getNote(w.emp.id);
                           const shiftNote = getShiftNote(w.emp.id, dateStr);
+                          const deptCfg = DEPARTMENT_CONFIG[w.dept];
+                          const displayTime = w.startTime && w.endTime ? `${w.startTime.slice(0,2)}-${w.endTime.slice(0,2)}` : undefined;
                           return (
                             <div key={i} className={`flex items-start gap-3 px-4 py-2.5 ${w.isMe ? isDark ? 'bg-indigo-900/30' : 'bg-indigo-50' : ''}`}>
                               <div
@@ -621,11 +658,15 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
                                   {w.isMe && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-100 px-1.5 py-0.5 rounded-full flex-shrink-0">Я</span>}
-                                  {workedHours && (
-                                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full flex-shrink-0">
-                                      {workedHours}ч
+                                  {displayTime ? (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: deptCfg.color + '20', color: deptCfg.color, border: `1px solid ${deptCfg.color}40` }}>
+                                      {w.role} {displayTime}
                                     </span>
-                                  )}
+                                  ) : workedHours ? (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: deptCfg.color + '20', color: deptCfg.color, border: `1px solid ${deptCfg.color}40` }}>
+                                      {workedHours}ч {deptCfg.label}
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <p className={`text-xs truncate ${isDark ? 'text-slate-400' : 'text-gray-400'}`}>{w.role}</p>
                                 {empNote && (
@@ -1004,10 +1045,12 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               const cEntry = data.shifts.find(s => s.employeeId === cId && s.date === dateStr);
               const cShift = cEntry?.shift ?? 'off';
               const cHours = cEntry?.hours;
+              const cMultipleShifts = cEntry?.multipleShifts;
+              const cShiftsWithTimes = cEntry?.shiftsWithTimes;
               const color  = getColleagueColorForDay(cEmp, data, dateStr);
               const cCustom = getShiftEdit(cId, dateStr);
-              return { shift: cShift, emp: cEmp, color, hours: cHours, customStart: cCustom?.customStart, customEnd: cCustom?.customEnd };
-            }).filter((c): c is NonNullable<typeof c> => c !== null && (c.shift !== 'off' || !!c.hours));
+              return { shift: cShift, emp: cEmp, color, hours: cHours, multipleShifts: cMultipleShifts, shiftsWithTimes: cShiftsWithTimes, customStart: cCustom?.customStart, customEnd: cCustom?.customEnd };
+            }).filter((c): c is NonNullable<typeof c> => c !== null && (c.shift !== 'off' || !!c.hours || !!c.multipleShifts || !!c.shiftsWithTimes));
 
             const hasColleague = colleagueShifts.length > 0;
             const hasAnyShift  = allShifts.length > 0;
@@ -1084,22 +1127,38 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                           const cTimes = SHIFT_TIMES[c.shift];
                           const timeStart = c.customStart ?? cTimes?.start;
                           const timeEnd = c.customEnd ?? cTimes?.end;
-                          let text: string | undefined;
-                          if (c.hours) {
-                            text = `${c.hours}ч`;
+                          let items: Array<{ text: string; color: string }> = [];
+                          
+                          if (c.shiftsWithTimes && c.shiftsWithTimes.length > 0) {
+                            items = c.shiftsWithTimes.map(swt => ({
+                              text: `${swt.role} ${swt.startTime.slice(0,2)}-${swt.endTime.slice(0,2)}`,
+                              color: DEPARTMENT_CONFIG[swt.dept].color
+                            }));
+                          } else if (c.multipleShifts && c.multipleShifts.length > 0) {
+                            items = c.multipleShifts.map(ms => ({
+                              text: `${ms.hours}ч`,
+                              color: DEPARTMENT_CONFIG[ms.dept].color
+                            }));
+                          } else if (c.hours) {
+                            items = [{ text: `${c.hours}ч`, color: c.color }];
                           } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {
-                            text = formatHourLabel(timeStart, timeEnd);
-                          } else {
-                            text = cTimes?.short;
+                            items = [{ text: formatHourLabel(timeStart, timeEnd) || '', color: c.color }];
+                          } else if (cTimes?.short) {
+                            items = [{ text: cTimes.short, color: c.color }];
                           }
-                          if (!text) return null;
+                          
+                          if (items.length === 0) return null;
                           return (
-                            <div
-                              key={i}
-                              className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] truncate"
-                              style={{ backgroundColor: c.color + '30', color: c.color, border: `1px solid ${c.color}60` }}
-                            >
-                              {text}
+                            <div key={i} className="w-full flex flex-col gap-[2px]">
+                              {items.map((item, idx) => (
+                                <div
+                                  key={idx}
+                                  className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] truncate"
+                                  style={{ backgroundColor: item.color + '30', color: item.color, border: `1px solid ${item.color}60` }}
+                                >
+                                  {item.text}
+                                </div>
+                              ))}
                             </div>
                           );
                         })}
@@ -1116,22 +1175,38 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                       const cTimes = SHIFT_TIMES[c.shift];
                       const timeStart = c.customStart ?? cTimes?.start;
                       const timeEnd = c.customEnd ?? cTimes?.end;
-                      let text: string | undefined;
-                      if (c.hours) {
-                        text = `${c.hours}ч`;
+                      let items: Array<{ text: string; color: string }> = [];
+                      
+                      if (c.shiftsWithTimes && c.shiftsWithTimes.length > 0) {
+                        items = c.shiftsWithTimes.map(swt => ({
+                          text: `${swt.role} ${swt.startTime.slice(0,2)}-${swt.endTime.slice(0,2)}`,
+                          color: DEPARTMENT_CONFIG[swt.dept].color
+                        }));
+                      } else if (c.multipleShifts && c.multipleShifts.length > 0) {
+                        items = c.multipleShifts.map(ms => ({
+                          text: `${ms.hours}ч`,
+                          color: DEPARTMENT_CONFIG[ms.dept].color
+                        }));
+                      } else if (c.hours) {
+                        items = [{ text: `${c.hours}ч`, color: c.color }];
                       } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {
-                        text = formatHourLabel(timeStart, timeEnd);
-                      } else {
-                        text = cTimes?.short;
+                        items = [{ text: formatHourLabel(timeStart, timeEnd) || '', color: c.color }];
+                      } else if (cTimes?.short) {
+                        items = [{ text: cTimes.short, color: c.color }];
                       }
-                      if (!text) return null;
+                      
+                      if (items.length === 0) return null;
                       return (
-                        <div
-                          key={i}
-                          className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] truncate"
-                          style={{ backgroundColor: c.color + '30', color: c.color, border: `1px solid ${c.color}60` }}
-                        >
-                          {text}
+                        <div key={i} className="w-full flex flex-col gap-[2px]">
+                          {items.map((item, idx) => (
+                            <div
+                              key={idx}
+                              className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px] truncate"
+                              style={{ backgroundColor: item.color + '30', color: item.color, border: `1px solid ${item.color}60` }}
+                            >
+                              {item.text}
+                            </div>
+                          ))}
                         </div>
                       );
                     })}

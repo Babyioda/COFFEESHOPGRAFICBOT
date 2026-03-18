@@ -57,16 +57,88 @@ function isRoleCell(cell: string): boolean {
   return true;
 }
 
-export function parseShiftValue(raw: string): { type: ShiftType; hours?: number } {
-  const v = raw.trim().toLowerCase();
-  if (!v || v === '-' || v === '—' || v === 'в' || v === 'вых' || v === 'о') return { type: 'off' };
-  if (v === 'с' || v === 'c' || v === 'сут' || v === 'сутки') return { type: 'daily' };
-  if (v.startsWith('от') || v === 'отп' || v === 'vacation') return { type: 'vacation' };
-  if (v === 'б' || v === 'бл' || v === 'болен' || v === 'больн' || v === 'больничный' || v === 'sick') return { type: 'sick' };
-  if (v === 'д' || v === 'd' || v === 'день' || v === 'дн' || v === 'дневная') return { type: 'day' };
-  if (v === 'н' || v === 'n' || v === 'ночь' || v === 'ноч' || v === 'ночная') return { type: 'night' };
+export function parseShiftValue(raw: string): { 
+  type: ShiftType; 
+  hours?: number; 
+  multipleShifts?: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number }>;
+  shiftsWithTimes?: Array<{ role: string; dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; startTime: string; endTime: string }>;
+} {
+  const v = raw.trim();
+  const vLower = v.toLowerCase();
+  
+  if (!v || v === '-' || v === '—' || vLower === 'в' || vLower === 'вых' || vLower === 'о') return { type: 'off' };
+  if (vLower === 'с' || vLower === 'c' || vLower === 'сут' || vLower === 'сутки') return { type: 'daily' };
+  if (vLower.startsWith('от') || vLower === 'отп' || vLower === 'vacation') return { type: 'vacation' };
+  if (vLower === 'б' || vLower === 'бл' || vLower === 'болен' || vLower === 'больн' || vLower === 'больничный' || vLower === 'sick') return { type: 'sick' };
+  if (vLower === 'д' || vLower === 'd' || vLower === 'день' || vLower === 'дн' || vLower === 'дневная') return { type: 'day' };
+  if (vLower === 'н' || vLower === 'n' || vLower === 'ночь' || vLower === 'ноч' || vLower === 'ночная') return { type: 'night' };
+  
+  // Сначала проверяем формат с временем (например "Бармен 12-15 Повар 15-17")
+  // Паттерн: "РольНазвание ЧЧ-ЧЧ РольНазвание ЧЧ-ЧЧ"
+  const timeRangePattern = /([А-Яа-яЁё]+)\s+(\d{1,2})-(\d{1,2})/g;
+  const timeMatches = Array.from(v.matchAll(timeRangePattern));
+  
+  if (timeMatches.length > 0) {
+    const shiftsWithTimes: Array<{ role: string; dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; startTime: string; endTime: string }> = [];
+    
+    for (const match of timeMatches) {
+      const role = match[1];
+      const startHour = parseInt(match[2]);
+      const endHour = parseInt(match[3]);
+      const startTime = `${String(startHour).padStart(2, '0')}:00`;
+      const endTime = `${String(endHour).padStart(2, '0')}:00`;
+      
+      // Определяем отдел по ролевому названию
+      const roleLower = role.toLowerCase();
+      let dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager' = 'kitchen';
+      
+      if (roleLower.includes('бармен')) dept = 'bar';
+      else if (roleLower.includes('бар')) dept = 'bar';
+      else if (roleLower.includes('повар')) dept = 'kitchen';
+      else if (roleLower.includes('кух')) dept = 'kitchen';
+      else if (roleLower.includes('официант')) dept = 'hall';
+      else if (roleLower.includes('зал')) dept = 'hall';
+      else if (roleLower.includes('менеджер')) dept = 'power';
+      else if (roleLower.includes('управляющий')) dept = 'power';
+      
+      shiftsWithTimes.push({ role, dept, startTime, endTime });
+    }
+    
+    if (shiftsWithTimes.length > 0) {
+      return { type: 'off', shiftsWithTimes };
+    }
+  }
+  
+  // Поддержка нескольких смен за день (например, "3Б 2К")
+  // Поддерживаем сокращения: Б=бар, К=кухня, З=зал, П=power/менеджер
+  if (vLower.match(/^\d+[БбКкЗзПп]/)) {
+    const multipleShifts: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number }> = [];
+    const parts = vLower.split(/\s+/);
+    
+    for (const part of parts) {
+      const match = part.match(/^(\d+)([БбКкЗзПп])$/);
+      if (match) {
+        const hours = parseInt(match[1]);
+        const deptChar = match[2].toUpperCase();
+        let dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager' = 'bar';
+        
+        if (deptChar === 'Б') dept = 'bar';
+        else if (deptChar === 'К') dept = 'kitchen';
+        else if (deptChar === 'З') dept = 'hall';
+        else if (deptChar === 'П') dept = 'power';
+        
+        multipleShifts.push({ dept, hours });
+      }
+    }
+    
+    if (multipleShifts.length > 0) {
+      const totalHours = multipleShifts.reduce((sum, s) => sum + s.hours, 0);
+      return { type: 'off', hours: totalHours, multipleShifts };
+    }
+  }
+  
   // Числа — это НЕ смена, просто часы. Блокируем отображение смены.
-  const num = parseFloat(v);
+  const num = parseFloat(vLower);
   if (!isNaN(num) && num > 0) return { type: 'off', hours: num };
   return { type: 'off' };
 }
@@ -219,6 +291,8 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       const parsed = parseShiftValue(cell);
       const shift = parsed.type;
       const hours = parsed.hours;
+      const multipleShifts = parsed.multipleShifts;
+      const shiftsWithTimes = parsed.shiftsWithTimes;
 
       
 
@@ -229,7 +303,13 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       // она сохраняется как обычно.
       if (existingIdx !== -1) {
         const existing = shifts[existingIdx];
-        if (hours && hours > 0) {
+        if (shiftsWithTimes && shiftsWithTimes.length > 0) {
+          // Обновляем со смен с временем
+          shifts[existingIdx] = { ...existing, shiftsWithTimes };
+        } else if (multipleShifts && multipleShifts.length > 0) {
+          // Обновляем с несколькими смен и общим количеством часов
+          shifts[existingIdx] = { ...existing, hours, multipleShifts };
+        } else if (hours && hours > 0) {
           // Обновляем/добавляем только поле hours, не убирая существующую смену
           shifts[existingIdx] = { ...existing, hours };
         } else if (shift !== 'off' && existing.shift === 'off') {
@@ -238,6 +318,8 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
         }
       } else {
         const newEntry: any = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
+        if (shiftsWithTimes && shiftsWithTimes.length > 0) newEntry.shiftsWithTimes = shiftsWithTimes;
+        else if (multipleShifts && multipleShifts.length > 0) newEntry.multipleShifts = multipleShifts;
         if (hours && hours > 0) newEntry.hours = hours;
         shifts.push(newEntry as any);
       }

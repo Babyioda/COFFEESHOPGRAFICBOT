@@ -3,7 +3,7 @@ import {
   ScheduleData, ShiftType, SHIFT_CONFIG,
   DEPARTMENT_CONFIG, getDepartment, Employee,
 } from '../types/schedule';
-import { getEmpPrefs, getEmpNote, saveEmpNote } from '../utils/adminEdits';
+import { getEmpPrefs, getEmpNote, saveEmpNote, getShiftEdit } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
 
@@ -49,8 +49,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState(() => getEmpNote(emp.id) || '');
   const [savedNote, setSavedNote] = useState(() => getEmpNote(emp.id) || '');
-
-  const dept    = emp.department ?? getDepartment(emp.role);
+;
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
 
   const todayStr    = formatDate(today.getFullYear(), today.getMonth()+1, today.getDate());
@@ -69,6 +68,11 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const todayRole   = todayEntry?.role || emp.role;
   const todayCfg    = SHIFT_CONFIG[todayShift];
   const todayTimes  = SHIFT_TIMES[todayShift];
+  
+  // Получаем кастомное время на сегодня, если администратор его задал
+  const todayCustomEdit = getShiftEdit(emp.id, todayStr);
+  const todayDisplayStart = todayCustomEdit?.customStart || todayTimes?.start;
+  const todayDisplayEnd = todayCustomEdit?.customEnd || todayTimes?.end;
 
   // Цвет шапки — по должности сегодня
   const headerDept   = getDepartment(todayRole) ?? dept;
@@ -191,8 +195,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                 <div>
                   <p className="text-white/60 text-xs font-medium">Сегодня</p>
                   <p className="font-bold text-sm">{todayCfg.label}</p>
-                  {todayTimes && (
-                    <p className="text-white/70 text-xs">{todayTimes.start} — {todayTimes.end}</p>
+                  {todayDisplayStart && todayDisplayEnd && (
+                    <p className="text-white/70 text-xs">{todayDisplayStart} — {todayDisplayEnd}</p>
                   )}
                 </div>
               </div>
@@ -284,6 +288,12 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                 const dow      = new Date(cardYear, cardMonth-1, day).getDay();
                 const isWeekend= dow === 0 || dow === 6;
                 const times    = SHIFT_TIMES[shift];
+                
+                // Получаем кастомное время, если администратор его задал
+                const dateStr = formatDate(cardYear, cardMonth, day);
+                const customEdit = getShiftEdit(emp.id, dateStr);
+                const displayStart = customEdit?.customStart || times?.start;
+                const displayEnd = customEdit?.customEnd || times?.end;
 
                 // Для рабочих смен используем динамический цвет отдела вместо фиксированного класса
                 const isWorking = shift === 'daily' || shift === 'day' || shift === 'night';
@@ -304,19 +314,19 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                     } : { minHeight: '60px' }}
                   >
                     <span className={`text-[11px] font-bold leading-tight ${isWeekend && shift === 'off' ? 'text-rose-400' : ''}`}>{day}</span>
-                    {isWorking && times && (
+                    {isWorking && displayStart && displayEnd && (
                       <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
                         <div
                           className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
                           style={{ backgroundColor: dayColor + '30', color: dayColor }}
                         >
-                          {times.start}
+                          {displayStart}
                         </div>
                         <div
                           className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
                           style={{ backgroundColor: dayColor + '30', color: dayColor }}
                         >
-                          {times.end}
+                          {displayEnd}
                         </div>
                       </div>
                     )}

@@ -184,12 +184,26 @@ export interface Employee {
   customUsername?: string; // вручную введённый @username
 }
 
+export interface MultipleShift {
+  dept: Department;
+  hours: number;
+}
+
+export interface ShiftWithTime {
+  role: string;        // должность "Бармен"
+  dept: Department;    // отдел "bar"  
+  startTime: string;   // "12:00"
+  endTime: string;     // "15:00"
+}
+
 export interface ShiftEntry {
   employeeId: string;
   date: string;       // ISO yyyy-mm-dd
   shift: ShiftType;
   role?: string;      // должность на конкретный день (если отличается от основной)
   hours?: number;     // необязательное поле — количество часов, если в таблице указано число
+  multipleShifts?: MultipleShift[];  // несколько смен в день с часами (например, 3ч бар + 2ч кухня)
+  shiftsWithTimes?: ShiftWithTime[];  // несколько смен с временем (например, Бармен 12-15, Повар 15-17)
 }
 
 export interface ScheduleData {

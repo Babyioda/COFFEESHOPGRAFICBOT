@@ -83,7 +83,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
   const dateStr = formatDate(year, month, day);
 
   // Собираем всех кто работает
-  const working: { name: string; role: string; color: string; shift: ShiftType; dept: Department | null }[] = [];
+  const working: { name: string; role: string; color: string; shift: ShiftType; dept: Department | null; customStart?: string; customEnd?: string }[] = [];
   const absent:  { name: string; role: string; color: string; shift: ShiftType }[] = [];
 
   data.employees.forEach(emp => {
@@ -225,7 +225,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
                               {/* Показываем актуальные часы, если заданы админом */}
                               {(w.customStart || w.customEnd) && (
                                 <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 rounded px-1.5 ml-1">
-                                  {w.customStart ?? ''}{w.customStart && w.customEnd ? '–' : ''}{w.customEnd ?? ''}
+                                  {w.customStart?.slice(0, 2) ?? ''}{w.customStart && w.customEnd ? '–' : ''}{w.customEnd?.slice(0, 2) ?? ''}
                                 </span>
                               )}
                             </div>
@@ -382,7 +382,9 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
                 .map(s => getShiftEdit(s.employeeId, dateStr))
                 .find(e => e && (e.customStart || e.customEnd));
               if (custom) {
-                customHours = `${custom.customStart ?? ''}${custom.customStart && custom.customEnd ? '–' : ''}${custom.customEnd ?? ''}`;
+                const s = custom.customStart ? custom.customStart.slice(0, 2) : '';
+                const e = custom.customEnd ? custom.customEnd.slice(0, 2) : '';
+                customHours = `${s}${s && e ? '–' : ''}${e}`;
               }
             }
 

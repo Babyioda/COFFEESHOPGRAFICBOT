@@ -227,6 +227,9 @@ export function saveLinkedEmpId(empId: string | null): void {
     // Save to Firebase first (primary)
     setUserLink(uid, empId).then(() => {
       console.log('[AdminEdits] User link saved to Firebase successfully');
+      // Keep a local copy so auto-login works on reload even when Firebase isn't queried.
+      localStorage.setItem(STORAGE_LINKED_ID, empId);
+      console.log('[AdminEdits] localStorage.setItem(STORAGE_LINKED_ID, empId) called (cached)');
     }).catch((err) => {
       console.error('[AdminEdits] Failed to sync user link to Firebase:', err);
       // Fallback to localStorage
