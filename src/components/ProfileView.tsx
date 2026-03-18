@@ -690,6 +690,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                       try {
                         const { deleteEmployeeNotes } = await import('../utils/firebase');
                         await deleteEmployeeNotes(editingEmp.id);
+                        // Clear cached note locally as well
+                        saveEmpNote(editingEmp.id, '');
+                        setNoteText('');
                         alert('✅ Все заметки сотрудника удалены из Firebase');
                       } catch (err) {
                         alert('❌ Ошибка при удалении заметок: ' + (err instanceof Error ? err.message : 'Unknown error'));
@@ -710,6 +713,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                 <textarea
                   value={noteText}
                   onChange={e => setNoteText(e.target.value)}
+                  onBlur={() => editingEmp && saveEmpNote(editingEmp.id, noteText)}
                   placeholder="Например: работает 0.5 ставки, особые условия..."
                   rows={4}
                   className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
@@ -724,7 +728,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                       <input
                         type="checkbox"
                         checked={adminShowTelegram}
-                        onChange={e => setAdminShowTelegram(e.target.checked)}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setAdminShowTelegram(checked);
+                          if (editingEmp) {
+                            const updated = { ...editingEmp, showTelegram: checked };
+                            saveEmpPrefs({ empId: editingEmp.id, showTelegram: checked });
+                            setEditingEmp(updated);
+                            onEmployeeUpdate?.(updated);
+                          }
+                        }}
                       />
                       Показывать Telegram
                     </label>
@@ -734,7 +747,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                     <input
                       type="text"
                       value={adminTelegramUsername}
-                      onChange={e => setAdminTelegramUsername(e.target.value.replace(/^@/, '').trim())}
+                      onChange={e => {
+                        const username = e.target.value.replace(/^@/, '').trim();
+                        setAdminTelegramUsername(username);
+                        if (editingEmp) {
+                          saveEmpPrefs({ empId: editingEmp.id, tgUsername: username || undefined });
+                        }
+                      }}
                       placeholder="example"
                       className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
                     />
@@ -744,7 +763,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                     <input
                       type="date"
                       value={adminBirthdayInput}
-                      onChange={e => setAdminBirthdayInput(e.target.value)}
+                      onChange={e => {
+                        const value = e.target.value;
+                        setAdminBirthdayInput(value);
+                        if (editingEmp) {
+                          const mmdd = value ? value.slice(5) : undefined;
+                          saveEmpPrefs({ empId: editingEmp.id, birthday: mmdd });
+                        }
+                      }}
                       className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
                     />
                     <p className="text-[10px] text-gray-500">Год игнорируется</p>
@@ -771,12 +797,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                       tgUsername: adminTelegramUsername || undefined,
                       birthday: mmdd 
                     });
-                    editingEmp.showTelegram = adminShowTelegram;
-                    editingEmp.birthday = mmdd;
-                    const upd = onEmployeeUpdate;
-                    if (upd && editingEmp) {
-                      upd({...editingEmp});
-                    }
+                    const updated = { ...editingEmp, showTelegram: adminShowTelegram, birthday: mmdd };
+                    setEditingEmp(updated);
+                    onEmployeeUpdate?.(updated);
                   }
                   setEditingEmp(null);
                 }}

@@ -135,8 +135,32 @@ export function loadEmpNotes(): EmpNote[] {
   catch { return []; }
 }
 
+function saveEmpNoteToLocal(empId: string, note: string): void {
+  const finalNote = note.trim();
+  const all = loadEmpNotes();
+  const idx = all.findIndex(e => e.empId === empId);
+
+  if (finalNote) {
+    if (idx >= 0) all[idx] = { empId, note: finalNote };
+    else all.push({ empId, note: finalNote });
+  } else if (idx >= 0) {
+    all.splice(idx, 1);
+  }
+
+  try {
+    localStorage.setItem(STORAGE_EMP_NOTES, JSON.stringify(all));
+    console.log('[AdminEdits] Employee note saved to localStorage (cache)', { empId });
+  } catch (err) {
+    console.error('[AdminEdits] Failed to cache employee note to localStorage:', err);
+  }
+}
+
 export function saveEmpNote(empId: string, note: string): void {
   const finalNote = note.trim();
+
+  // Persist locally right away so UI stays consistent and changes survive reloads
+  saveEmpNoteToLocal(empId, finalNote);
+
   console.log('[AdminEdits] Saving employee note to Firebase:', { empId, length: finalNote.length });
   
   // Save to Firebase first (primary source)
@@ -177,6 +201,18 @@ export function loadEmpPrefs(): EmpPrefs[] {
   try {
     const raw = localStorage.getItem(STORAGE_EMP_PREFS) || '[]';
     const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      // Legacy/invalid format; try to recover.
+      if (parsed && typeof parsed === 'object' && 'empId' in parsed) {
+        return [parsed as EmpPrefs];
+      }
+      if (parsed && typeof parsed === 'object') {
+        const maybeArray = Object.values(parsed).filter((v): v is EmpPrefs => v && typeof v === 'object' && 'empId' in v);
+        if (maybeArray.length) return maybeArray;
+      }
+      console.warn('[AdminEdits] Expected emp prefs to be an array, got:', parsed);
+      return [];
+    }
     globalPrefsSyncError = false;
     globalPrefsSyncErrorMsg = '';
     return parsed;
@@ -191,7 +227,32 @@ export function loadEmpPrefs(): EmpPrefs[] {
   }
 }
 
+function saveEmpPrefsToLocal(pref: EmpPrefs): void {
+  const all = loadEmpPrefs();
+  const idx = all.findIndex(e => e.empId === pref.empId);
+  if (idx >= 0) all[idx] = { ...all[idx], ...pref };
+  else all.push(pref);
+  try {
+    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
+    console.log('[AdminEdits] Employee prefs saved to localStorage (cache)', { empId: pref.empId });
+  } catch (e) {
+    console.error('[AdminEdits] Failed to save prefs to localStorage:', e);
+  }
+}
+
+export function cacheEmpPrefs(prefs: EmpPrefs[]): void {
+  try {
+    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(prefs));
+    console.log('[AdminEdits] Cached employee prefs to localStorage (from remote)', prefs.length);
+  } catch (e) {
+    console.error('[AdminEdits] Failed to cache employee prefs to localStorage:', e);
+  }
+}
+
 export function saveEmpPrefs(pref: EmpPrefs): void {
+  // Persist prefs locally immediately so checkbox toggles and similar changes are not lost.
+  saveEmpPrefsToLocal(pref);
+
   console.log('[AdminEdits] Saving employee prefs to Firebase:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday, customUsername: pref.customUsername, tgUsername: pref.tgUsername });
   // Save to Firebase first (primary source)
   setEmpPrefs({

@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ShiftsView } from './components/ShiftsView';
 import { ProfileView } from './components/ProfileView';
 import { getTgUserId } from './utils/telegram';
+import { watchEmpPrefs } from './utils/firebase';
 import { ScheduleData, Employee } from './types/schedule';
 
 const ADMIN_TG_IDS = [783948887, 6147055724];
 import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey } from './hooks/useGoogleSheets';
-import { getEmpPrefs, getLinkedEmpId, saveLinkedEmpId } from './utils/adminEdits';
+import { getEmpPrefs, getLinkedEmpId, saveLinkedEmpId, cacheEmpPrefs } from './utils/adminEdits';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 type TabId = 'shifts' | 'profile';
@@ -258,6 +259,32 @@ function AppInner() {
     return () => clearInterval(interval);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetId]);
+
+  // ── Подписка на prefs (Telegram/birthday) из Firebase, чтобы изменения синхронизировались между устройствами ──
+  useEffect(() => {
+    const unsub = watchEmpPrefs((prefs) => {
+      cacheEmpPrefs(prefs);
+      setLiveData(prev => {
+        if (!prev) return prev;
+        const next = {
+          ...prev,
+          employees: prev.employees.map(emp => {
+            const p = prefs.find(x => x.empId === emp.id);
+            if (!p) return emp;
+            return {
+              ...emp,
+              showTelegram: p.showTelegram !== undefined ? p.showTelegram : emp.showTelegram,
+              birthday: p.birthday !== undefined ? p.birthday : emp.birthday,
+              tgUsername: p.tgUsername !== undefined ? p.tgUsername : emp.tgUsername,
+            };
+          }),
+        };
+        return next;
+      });
+    });
+
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
 
   const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string) => {
     const cleanId = id.includes('spreadsheets/d/')

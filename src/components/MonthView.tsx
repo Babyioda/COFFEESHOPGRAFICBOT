@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ScheduleData, ShiftType, SHIFT_CONFIG, DEPARTMENT_CONFIG, Department, getDepartment } from '../types/schedule';
+import React, { useMemo, useState } from 'react';
+import { ScheduleData, ShiftEntry, Employee, ShiftType, SHIFT_CONFIG, DEPARTMENT_CONFIG, Department, getDepartment } from '../types/schedule';
 import { getShiftEdit } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
@@ -13,6 +13,63 @@ interface MonthViewProps {
 
 function formatDate(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+function calcHoursFromTimeRange(start: string, end: string): number {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0;
+  let startMin = sh * 60 + sm;
+  let endMin = eh * 60 + em;
+  if (endMin <= startMin) endMin += 24 * 60;
+  return Math.round(((endMin - startMin) / 60) * 100) / 100;
+}
+
+function formatTimeRange(start?: string, end?: string) {
+  const s = start ? start.slice(0, 2) : '';
+  const e = end ? end.slice(0, 2) : '';
+  if (!s && !e) return '';
+  return `${s}${s && e ? '–' : ''}${e}`;
+}
+
+type DaySegment = { label: string; color: string; dept: Department };
+
+function getDaySegmentsForEmployee(emp: Employee, dateStr: string, shifts: ShiftEntry[]): DaySegment[] {
+  const entry = shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
+  if (!entry) return [];
+
+  const baseRole = entry.role || emp.role;
+  const deptBase = getDepartment(baseRole) ?? emp.department ?? 'kitchen';
+
+  const edit = getShiftEdit(emp.id, dateStr);
+  if (edit?.customStart && edit?.customEnd) {
+    const label = formatTimeRange(edit.customStart, edit.customEnd);
+    const color = DEPARTMENT_CONFIG[deptBase].color;
+    return label ? [{ label, color, dept: deptBase }] : [];
+  }
+
+  if (entry.shiftsWithTimes && entry.shiftsWithTimes.length > 0) {
+    return entry.shiftsWithTimes.map(swt => {
+      const dept = swt.dept;
+      const label = formatTimeRange(swt.startTime, swt.endTime);
+      return { label, color: DEPARTMENT_CONFIG[dept].color, dept };
+    }).filter(s => s.label);
+  }
+
+  if (entry.multipleShifts && entry.multipleShifts.length > 0) {
+    return entry.multipleShifts.map(ms => {
+      const roleForDept = emp.roles?.find(r => getDepartment(r) === ms.dept) || baseRole;
+      const label = `${ms.hours}ч`;
+      return { label, color: DEPARTMENT_CONFIG[ms.dept].color, dept: ms.dept };
+    });
+  }
+
+  if (typeof entry.hours === 'number' && entry.hours > 0) {
+    const label = `${entry.hours}ч`;
+    return [{ label, color: DEPARTMENT_CONFIG[deptBase].color, dept: deptBase }];
+  }
+
+  return [];
 }
 
 const DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
@@ -375,12 +432,12 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
             const myShift   = getMyShift(day);
             const isMyShift = myShift !== null && myShift !== 'off';
 
-            // Проверяем, есть ли у кого-то custom часы на этот день
-            let customHours = null;
-            if (hasShifts) {
-              const custom = data.shifts
-                .map(s => getShiftEdit(s.employeeId, dateStr))
-                .find(e => e && (e.customStart || e.customEnd));
+  const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) ?? null : null;
+  const mySegments = linkedEmp ? getDaySegmentsForEmployee(linkedEmp, dateStr, data.shifts) : [];
+
+  // Проверяем, есть ли у кого-то custom часы на этот день (для общего календаря)
+  let customHours = null;
+  if (!linkedEmp && hasShifts) {
               if (custom) {
                 const s = custom.customStart ? custom.customStart.slice(0, 2) : '';
                 const e = custom.customEnd ? custom.customEnd.slice(0, 2) : '';
@@ -416,11 +473,30 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
                     }}
                   />
                 )}
-                {/* Показываем часы, если есть админские правки */}
-                {customHours && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-amber-600 bg-amber-50 rounded px-1.5 mt-0.5">
-                    {customHours}
-                  </span>
+                {/* Показываем часы для текущего пользователя (раздельно по должностям) */}
+                {linkedEmp && mySegments.length > 0 ? (
+                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex flex-wrap justify-center gap-1 mt-0.5">
+                    {mySegments.slice(0, 3).map((seg, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: seg.color + '22', color: seg.color, border: `1px solid ${seg.color}40` }}
+                      >
+                        {seg.label}
+                      </span>
+                    ))}
+                    {mySegments.length > 3 && (
+                      <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                        +{mySegments.length - 3}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  customHours && (
+                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 text-[9px] font-semibold text-amber-600 bg-amber-50 rounded px-1.5 mt-0.5">
+                      {customHours}
+                    </span>
+                  )
                 )}
               </button>
             );

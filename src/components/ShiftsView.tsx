@@ -45,6 +45,31 @@ function getDeptColorByRole(role: string, fallback = '#6366f1'): string {
   return dept ? DEPARTMENT_CONFIG[dept].color : fallback;
 }
 
+const STORAGE_COLLEAGUE_COLORS = 'sf_colleague_colors';
+
+function loadColleagueColors(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(STORAGE_COLLEAGUE_COLORS) || '{}'); } catch { return {}; }
+}
+
+function saveColleagueColor(empId: string, color: string): void {
+  const all = loadColleagueColors();
+  all[empId] = color;
+  try { localStorage.setItem(STORAGE_COLLEAGUE_COLORS, JSON.stringify(all)); } catch {}
+}
+
+function ensureColleagueColor(emp: Employee): string {
+  const all = loadColleagueColors();
+  if (all[emp.id]) return all[emp.id];
+  // Use a deterministic color derived from the employee id, falling back to their own color or dept color.
+  const base = emp.color || getDeptColorByRole(emp.role, '#6366f1');
+  const hash = Array.from(emp.id).reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xffff, 0);
+  const hue = hash % 360;
+  const generated = `hsl(${hue}, 62%, 55%)`;
+  const chosen = base || generated;
+  saveColleagueColor(emp.id, chosen);
+  return chosen;
+}
+
 // format hours into compact "00-00" label; input like "08:00" -> "08-00" etc
 function formatHourLabel(start?: string, end?: string): string | undefined {
   if (!start || !end) return undefined;
@@ -54,11 +79,6 @@ function formatHourLabel(start?: string, end?: string): string | undefined {
   return `${s}-${e}`;
 }
 
-function getColleagueColorForDay(emp: Employee, data: ScheduleData, dateStr: string): string {
-  const entry = data.shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
-  const role  = entry?.role || emp.role;
-  return getDeptColorByRole(role, emp.color);
-}
 
 function formatDate(y: number, m: number, d: number) {
   return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
@@ -770,11 +790,12 @@ const ColleagueSelector: React.FC<ColleagueSelectorProps> = ({ data, linkedEmpId
 
   const EmpBtn = ({ emp }: { emp: Employee }) => {
     const isSelected = selectedIds.includes(emp.id);
-        const empColor   = getDeptColorByRole(emp.role, emp.color);
-        return (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onToggle(emp.id)}
+    const colleagueColors = loadColleagueColors();
+    const empColor = colleagueColors[emp.id] ?? getDeptColorByRole(emp.role, emp.color);
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => onToggle(emp.id)}
               className={`flex-1 flex items-center gap-3 p-3 rounded-xl border-2 transition-all active:scale-[0.98] ${
                 isSelected
                   ? 'border-transparent'
@@ -928,6 +949,11 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
     setColleagueIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id].slice(0, 3);
       localStorage.setItem(STORAGE_COLLEAGUE_IDS, JSON.stringify(next));
+      // Ensure we assign a stable color for newly selected colleagues
+      if (!prev.includes(id) && next.includes(id)) {
+        const emp = data.employees.find(e => e.id === id);
+        if (emp) ensureColleagueColor(emp);
+      }
       return next;
     });
   };
@@ -1050,9 +1076,24 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               const cHours = cEntry?.hours;
               const cMultipleShifts = cEntry?.multipleShifts;
               const cShiftsWithTimes = cEntry?.shiftsWithTimes;
-              const color  = getColleagueColorForDay(cEmp, data, dateStr);
+              const color  = ensureColleagueColor(cEmp);
               const cCustom = getShiftEdit(cId, dateStr);
-              return { shift: cShift, emp: cEmp, color, hours: cHours, multipleShifts: cMultipleShifts, shiftsWithTimes: cShiftsWithTimes, customStart: cCustom?.customStart, customEnd: cCustom?.customEnd };
+              const cRole = cEntry?.role || cEmp.role;
+              const cDept = getDepartment(cRole);
+              const cDeptIcon = cDept ? DEPARTMENT_CONFIG[cDept].icon : '';
+              return {
+                shift: cShift,
+                emp: cEmp,
+                color,
+                deptIcon: cDeptIcon,
+                dept: cDept,
+                role: cRole,
+                hours: cHours,
+                multipleShifts: cMultipleShifts,
+                shiftsWithTimes: cShiftsWithTimes,
+                customStart: cCustom?.customStart,
+                customEnd: cCustom?.customEnd,
+              };
             }).filter((c): c is NonNullable<typeof c> => c !== null && (c.shift !== 'off' || !!c.hours || !!c.multipleShifts || !!c.shiftsWithTimes));
 
             const hasColleague = colleagueShifts.length > 0;
@@ -1131,23 +1172,27 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                           const timeStart = c.customStart ?? cTimes?.start;
                           const timeEnd = c.customEnd ?? cTimes?.end;
                           let items: Array<{ text: string; color: string }> = [];
-                          
+                          const deptIcon = c.deptIcon ? `${c.deptIcon} ` : '';
+
                           if (c.shiftsWithTimes && c.shiftsWithTimes.length > 0) {
-                            items = c.shiftsWithTimes.map(swt => ({
-                              text: `${swt.role} ${swt.startTime.slice(0,2)}-${swt.endTime.slice(0,2)}`,
-                              color: DEPARTMENT_CONFIG[swt.dept].color
-                            }));
+                            items = c.shiftsWithTimes.map(swt => {
+                              const icon = DEPARTMENT_CONFIG[swt.dept]?.icon ? `${DEPARTMENT_CONFIG[swt.dept].icon} ` : '';
+                              return {
+                                text: `${icon}${swt.role} ${swt.startTime.slice(0,2)}-${swt.endTime.slice(0,2)}`,
+                                color: c.color,
+                              };
+                            });
                           } else if (c.multipleShifts && c.multipleShifts.length > 0) {
                             items = c.multipleShifts.map(ms => ({
-                              text: `${ms.hours}ч`,
-                              color: DEPARTMENT_CONFIG[ms.dept].color
+                              text: `${deptIcon}${ms.hours}ч`,
+                              color: c.color,
                             }));
                           } else if (c.hours) {
-                            items = [{ text: `${c.hours}ч`, color: c.color }];
+                            items = [{ text: `${deptIcon}${c.hours}ч`, color: c.color }];
                           } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {
-                            items = [{ text: formatHourLabel(timeStart, timeEnd) || '', color: c.color }];
+                            items = [{ text: `${deptIcon}${formatHourLabel(timeStart, timeEnd) || ''}`, color: c.color }];
                           } else if (cTimes?.short) {
-                            items = [{ text: cTimes.short, color: c.color }];
+                            items = [{ text: `${deptIcon}${cTimes.short}`, color: c.color }];
                           }
                           
                           if (items.length === 0) return null;
@@ -1179,23 +1224,27 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                       const timeStart = c.customStart ?? cTimes?.start;
                       const timeEnd = c.customEnd ?? cTimes?.end;
                       let items: Array<{ text: string; color: string }> = [];
-                      
+                      const deptIcon = c.deptIcon ? `${c.deptIcon} ` : '';
+
                       if (c.shiftsWithTimes && c.shiftsWithTimes.length > 0) {
-                        items = c.shiftsWithTimes.map(swt => ({
-                          text: `${swt.role} ${swt.startTime.slice(0,2)}-${swt.endTime.slice(0,2)}`,
-                          color: DEPARTMENT_CONFIG[swt.dept].color
-                        }));
+                        items = c.shiftsWithTimes.map(swt => {
+                          const icon = DEPARTMENT_CONFIG[swt.dept]?.icon ? `${DEPARTMENT_CONFIG[swt.dept].icon} ` : '';
+                          return {
+                            text: `${icon}${swt.role} ${swt.startTime.slice(0,2)}-${swt.endTime.slice(0,2)}`,
+                            color: c.color,
+                          };
+                        });
                       } else if (c.multipleShifts && c.multipleShifts.length > 0) {
                         items = c.multipleShifts.map(ms => ({
-                          text: `${ms.hours}ч`,
-                          color: DEPARTMENT_CONFIG[ms.dept].color
+                          text: `${deptIcon}${ms.hours}ч`,
+                          color: c.color,
                         }));
                       } else if (c.hours) {
-                        items = [{ text: `${c.hours}ч`, color: c.color }];
+                        items = [{ text: `${deptIcon}${c.hours}ч`, color: c.color }];
                       } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {
-                        items = [{ text: formatHourLabel(timeStart, timeEnd) || '', color: c.color }];
+                        items = [{ text: `${deptIcon}${formatHourLabel(timeStart, timeEnd) || ''}`, color: c.color }];
                       } else if (cTimes?.short) {
-                        items = [{ text: cTimes.short, color: c.color }];
+                        items = [{ text: `${deptIcon}${cTimes.short}`, color: c.color }];
                       }
                       
                       if (items.length === 0) return null;
@@ -1236,7 +1285,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
           {colleagueIds.map(cId => {
             const cEmp = data.employees.find(e => e.id === cId);
             if (!cEmp) return null;
-            const cColor = getDeptColorByRole(cEmp.role, cEmp.color);
+            const cColor = ensureColleagueColor(cEmp);
             return (
               <div key={cId} className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cColor }} />
