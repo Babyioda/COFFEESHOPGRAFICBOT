@@ -103,7 +103,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
     }
   });
 
-  const byDept: Record<Department, typeof working> = { power: [], bar: [], hall: [], kitchen: [] };
+  const byDept: Record<Department, typeof working> = { bar_manager: [], power: [], bar: [], hall: [], kitchen: [] };
   working.forEach(w => { byDept[w.dept ?? 'kitchen'].push(w); });
 
   type ByShift = Partial<Record<ShiftType, typeof working>>;

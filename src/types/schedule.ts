@@ -91,7 +91,7 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
     color: '#FFD700', // ярко-золотой
     bgColor: 'bg-yellow-100',
     textColor: 'text-yellow-800',
-    roles: ['бар-менеджер', 'барменеджер'],
+    roles: ['бар-менеджер', 'барменеджер', 'bar-manager', 'bar manager', 'бармен менеджер', 'менеджер бара'],
   },
   power: {
     label: 'Менеджер',
@@ -139,8 +139,8 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
 export function getDepartment(role: string): Department | null {
   const normalized = role.toLowerCase().trim();
 
-  // Порядок проверки важен: сначала более специфичные (барменеджер → power, бармен → bar)
-  const ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
+  // Порядок проверки важен: сначала более специфичные (барменеджер → bar_manager, бармен → bar)
+  const ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 
   // 1. Точное совпадение с любым из roles
   for (const dept of ORDER) {

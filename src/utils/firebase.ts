@@ -695,6 +695,7 @@ export async function fetchEmpNotes(): Promise<EmpNoteDoc[]> {
 export interface EmpPrefsDoc {
   empId: string;
   showTelegram?: boolean;
+  tgUsername?: string;    // Telegram username set by admin
   birthday?: string; // MM-DD
   customUsername?: string; // Manually entered @username
   updatedAt?: any;

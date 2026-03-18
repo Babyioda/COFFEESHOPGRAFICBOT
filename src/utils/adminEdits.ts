@@ -25,7 +25,7 @@ export function loadShiftEdits(): ShiftEdit[] {
   catch { return []; }
 }
 
-import { addShiftNote, setShiftEdit, setEmpNote, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
+import { addShiftNote, deleteShiftNotes, setShiftEdit, setEmpNote, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
 
 export function saveShiftEdit(edit: ShiftEdit): void {
   console.log('[AdminEdits] Saving shift edit to Firebase:', { empId: edit.empId, date: edit.date });
@@ -49,10 +49,15 @@ export function saveShiftEdit(edit: ShiftEdit): void {
     console.error('[AdminEdits] Apps Script sync failed:', err);
   });
   
-  // Also persist note to Firestore shift_notes if provided
+  // Also persist note to Firestore shift_notes if provided, or delete if empty
   if (edit.note && edit.note.trim()) {
     addShiftNote(`${edit.empId}-${edit.date}`, edit.note).catch((err) => {
       console.error('[AdminEdits] Failed to sync shift note to Firebase:', err);
+    });
+  } else {
+    // If note is empty, delete existing shift notes for this shift
+    deleteShiftNotes(`${edit.empId}-${edit.date}`).catch((err) => {
+      console.error('[AdminEdits] Failed to delete shift notes from Firebase:', err);
     });
   }
 }
@@ -72,6 +77,11 @@ export function deleteShiftEdit(empId: string, date: string): void {
   }).catch((err) => {
     console.error('[AdminEdits] Failed to delete shift edit from Firebase:', err);
     alert('❌ Не удалось удалить правку смены из Firebase. Проверьте соединение.');
+  });
+  
+  // Also delete associated shift notes
+  deleteShiftNotes(`${empId}-${date}`).catch((err) => {
+    console.error('[AdminEdits] Failed to delete shift notes from Firebase:', err);
   });
   
   // Sync deletion to Apps Script as async task
@@ -148,11 +158,12 @@ export function loadEmpPrefs(): EmpPrefs[] {
 }
 
 export function saveEmpPrefs(pref: EmpPrefs): void {
-  console.log('[AdminEdits] Saving employee prefs to Firebase:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday, customUsername: pref.customUsername });
+  console.log('[AdminEdits] Saving employee prefs to Firebase:', { empId: pref.empId, showTelegram: pref.showTelegram, birthday: pref.birthday, customUsername: pref.customUsername, tgUsername: pref.tgUsername });
   // Save to Firebase first (primary source)
   setEmpPrefs({
     empId: pref.empId,
     showTelegram: pref.showTelegram,
+    tgUsername: pref.tgUsername,
     birthday: pref.birthday,
     customUsername: pref.customUsername,
   }).then(() => {

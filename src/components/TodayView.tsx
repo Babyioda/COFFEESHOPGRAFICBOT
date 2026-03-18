@@ -33,7 +33,7 @@ const SHIFT_CARD_GRADIENT: Record<ShiftType, string> = {
   sick:     'from-red-500 to-rose-600',
 };
 
-const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
+const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 
 interface WorkingEntry {
   empId: string;
@@ -94,7 +94,7 @@ const DayCard: React.FC<DayCardProps> = ({ data, date, isToday }) => {
   const day = buildDayData(data, date);
 
   const byDept: Record<Department, WorkingEntry[]> = {
-    power: [], bar: [], hall: [], kitchen: [],
+    bar_manager: [], power: [], bar: [], hall: [], kitchen: [],
   };
   day.working.forEach(w => {
     const d = w.department ?? 'kitchen';

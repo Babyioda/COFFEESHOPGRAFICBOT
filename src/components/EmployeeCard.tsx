@@ -329,7 +329,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
 
             {/* Легенда — отделы вместо типов смен */}
             <div className={`flex flex-wrap gap-x-3 gap-y-1 px-3 py-2 border-t ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
-              {(['power','bar','hall','kitchen'] as const).map(d => {
+              {(['bar_manager','power','bar','hall','kitchen'] as const).map(d => {
                 const cfg = DEPARTMENT_CONFIG[d];
                 return (
                   <div key={d} className="flex items-center gap-1">

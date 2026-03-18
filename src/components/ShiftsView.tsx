@@ -17,7 +17,7 @@ const MONTHS_RU_GEN = [
   'июля','августа','сентября','октября','ноября','декабря',
 ];
 const DAYS_FULL = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
-const DEPT_ORDER: Department[] = ['power', 'bar', 'hall', 'kitchen'];
+const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 
 const SHIFT_TIMES: Record<ShiftType, { start: string; end: string; short: string } | null> = {
   daily:    { start: '08:00', end: '08:00', short: '08-08' },
@@ -1146,7 +1146,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
         {/* Легенда */}
         <div className={`flex flex-wrap gap-x-3 gap-y-1 px-3 py-2.5 border-t ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
-          {(['power','bar','hall','kitchen'] as Department[]).map(d => {
+          {(['bar_manager','power','bar','hall','kitchen'] as Department[]).map(d => {
             const cfg = DEPARTMENT_CONFIG[d];
             return (
               <div key={d} className="flex items-center gap-1">

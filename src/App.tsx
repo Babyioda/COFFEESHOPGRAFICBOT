@@ -77,6 +77,13 @@ function AppInner() {
     () => getLinkedEmpId(),
   );
 
+  // Синхронизировать activeTab с linkedEmpId при загрузке и при изменении
+  useEffect(() => {
+    if (linkedEmpId) {
+      setActiveTab('shifts');
+    }
+  }, [linkedEmpId]);
+
   const [fakeDate, setFakeDate] = useState<Date | null>(() => {
     const stored = localStorage.getItem(STORAGE_FAKE_DATE);
     if (stored) { const d = new Date(stored); return isNaN(d.getTime()) ? null : d; }

@@ -339,7 +339,7 @@ export const StaffView: React.FC<StaffViewProps> = ({ data, month, year, fakeDat
   const todayStr = formatDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
 
   // Группировка по отделам
-  const byDept: Record<Department, Employee[]> = { power: [], bar: [], hall: [], kitchen: [] };
+  const byDept: Record<Department, Employee[]> = { bar_manager: [], power: [], bar: [], hall: [], kitchen: [] };
   const unassigned: Employee[] = [];
 
   data.employees.forEach(emp => {
