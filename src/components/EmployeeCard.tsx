@@ -49,7 +49,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [noteText, setNoteText] = useState(() => getEmpNote(emp.id) || '');
   const [savedNote, setSavedNote] = useState(() => getEmpNote(emp.id) || '');
-;
+
+  const dept = emp.department ?? getDepartment(emp.role);
   const deptCfg = dept ? DEPARTMENT_CONFIG[dept] : null;
 
   const todayStr    = formatDate(today.getFullYear(), today.getMonth()+1, today.getDate());
@@ -133,7 +134,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                   <h2 className="font-extrabold text-xl leading-tight">{emp.name}</h2>
                   <p className="text-white/70 text-sm mt-0.5">{emp.role}</p>
                   {deptCfg && (
-                    <span className="text-xs font-semibold bg-white/20 rounded-full px-2.5 py-0.5 inline-block mt-1">
+                    <span className={`text-xs font-semibold rounded-full px-2.5 py-0.5 inline-block mt-1 ${isDark ? 'bg-white/20 text-white/80' : 'bg-slate-100 text-slate-700'}`}>
                       {deptCfg.icon} {deptCfg.label}
                     </span>
                   )}

@@ -68,6 +68,9 @@ export async function testFullFirebase(): Promise<TestResult[]> {
           console.log(
             `✅ [Firebase] ${collectionName}: Read successful (found ${docSnapshot.size} test documents)`
           );
+          if (!docSnapshot.empty) {
+            console.log(`🔎 [Firebase] ${collectionName}: Sample doc data:`, docSnapshot.docs[0].data());
+          }
         } catch (err: any) {
           result.read = { success: false, error: err.message };
           console.error(`❌ [Firebase] ${collectionName}: Read failed - ${err.code}: ${err.message}`);
@@ -171,6 +174,9 @@ export async function testFirestoreIndexError() {
         )
       );
       console.log(`[Firebase] Индексация: ${test.collection} — найдено документов:`, querySnapshot.size);
+      if (!querySnapshot.empty) {
+        console.log(`[Firebase] Индексация: ${test.collection} — пример данных:`, querySnapshot.docs[0].data());
+      }
     } catch (err: any) {
       console.error(`[Firebase] Ожидаемая ошибка индексации Firestore в ${test.collection}:`, err.code, err.message);
       if (err.message && err.message.includes('index')) {

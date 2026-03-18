@@ -86,15 +86,17 @@ interface EditShiftModalProps {
   shift: ShiftType;
   onClose: () => void;
   onSaved: () => void;
+  initialEdit?: { customStart?: string; customEnd?: string; note?: string }; // pass existing values from Firebase/local state
 }
-const EditShiftModal: React.FC<EditShiftModalProps> = ({ emp, date, shift, onClose, onSaved }) => {
+const EditShiftModal: React.FC<EditShiftModalProps> = ({ emp, date, shift, onClose, onSaved, initialEdit }) => {
   const { isDark } = useTheme();
   const defaultTimes = SHIFT_TIMES[shift];
   const existing = getShiftEdit(emp.id, date);
+  const editValues = initialEdit ?? existing;
 
-  const [startTime, setStartTime] = useState(existing?.customStart ?? defaultTimes?.start ?? '08:00');
-  const [endTime,   setEndTime]   = useState(existing?.customEnd   ?? defaultTimes?.end   ?? '20:00');
-  const [note,      setNote]      = useState(existing?.note ?? '');
+  const [startTime, setStartTime] = useState(editValues?.customStart ?? defaultTimes?.start ?? '08:00');
+  const [endTime,   setEndTime]   = useState(editValues?.customEnd   ?? defaultTimes?.end   ?? '20:00');
+  const [note,      setNote]      = useState(editValues?.note ?? '');
 
   const dayStr = new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
 
@@ -531,7 +533,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                                     <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
                                     {w.isMe && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-100 px-1.5 py-0.5 rounded-full flex-shrink-0">Я</span>}
                                     {w.birthday && (
-                                      <span className="text-[10px] font-bold text-pink-600 bg-pink-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${isDark ? 'bg-pink-600 text-white' : 'bg-pink-600 text-white'}`}>
                                         🎂 именинник
                                       </span>
                                     )}
@@ -599,7 +601,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <p className={`text-sm font-semibold truncate ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>{w.name}</p>
                                   {w.isMe && <span className="text-[10px] font-bold text-indigo-500 bg-indigo-100 px-1.5 py-0.5 rounded-full flex-shrink-0">Я</span>}
-                                  <span className="text-[10px] font-bold text-pink-600 bg-pink-100 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${isDark ? 'bg-pink-600 text-white' : 'bg-pink-600 text-white'}`}>
                                     🎂 именинник
                                   </span>
                                 </div>
@@ -728,6 +730,7 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
           emp={editingShift.emp}
           date={dateStr}
           shift={editingShift.shift}
+          initialEdit={getCustomTimes(editingShift.emp.id, dateStr)}
           onClose={() => setEditingShift(null)}
           onSaved={handleSaved}
         />

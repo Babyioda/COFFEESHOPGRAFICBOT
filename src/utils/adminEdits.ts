@@ -27,9 +27,40 @@ export function loadShiftEdits(): ShiftEdit[] {
 
 import { addShiftNote, deleteShiftNotes, setShiftEdit, setEmpNote, setEmpPrefs, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
 
+function saveShiftEditToLocal(edit: ShiftEdit) {
+  const all = loadShiftEdits();
+  const idx = all.findIndex(e => e.empId === edit.empId && e.date === edit.date);
+  const updated: ShiftEdit = { empId: edit.empId, date: edit.date, customStart: edit.customStart, customEnd: edit.customEnd, note: edit.note };
+  if (idx >= 0) {
+    all[idx] = updated;
+  } else {
+    all.push(updated);
+  }
+  try {
+    localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(all));
+    console.log('[AdminEdits] Shift edit cached to localStorage:', { empId: edit.empId, date: edit.date });
+  } catch (err) {
+    console.error('[AdminEdits] Failed to cache shift edit to localStorage:', err);
+  }
+}
+
+function deleteShiftEditFromLocal(empId: string, date: string) {
+  const all = loadShiftEdits();
+  const filtered = all.filter(e => !(e.empId === empId && e.date === date));
+  try {
+    localStorage.setItem(STORAGE_SHIFT_EDITS, JSON.stringify(filtered));
+    console.log('[AdminEdits] Shift edit removed from localStorage:', { empId, date });
+  } catch (err) {
+    console.error('[AdminEdits] Failed to remove shift edit from localStorage:', err);
+  }
+}
+
 export function saveShiftEdit(edit: ShiftEdit): void {
   console.log('[AdminEdits] Saving shift edit to Firebase:', { empId: edit.empId, date: edit.date });
-  
+
+  // Persist locally immediately so UI updates without waiting for Firebase
+  saveShiftEditToLocal(edit);
+
   // Save to Firebase first (primary source)
   setShiftEdit({
     empId: edit.empId,
@@ -43,12 +74,12 @@ export function saveShiftEdit(edit: ShiftEdit): void {
     console.error('[AdminEdits] Failed to save shift edit to Firebase:', err);
     alert('❌ Не удалось сохранить правку смены в Firebase. Проверьте соединение.');
   });
-  
+
   // Синхронизировать с Apps Script as async task
   syncShiftEditToServer(edit).catch(err => {
     console.error('[AdminEdits] Apps Script sync failed:', err);
   });
-  
+
   // Also persist note to Firestore shift_notes if provided, or delete if empty
   if (edit.note && edit.note.trim()) {
     addShiftNote(`${edit.empId}-${edit.date}`, edit.note).catch((err) => {
@@ -64,7 +95,10 @@ export function saveShiftEdit(edit: ShiftEdit): void {
 
 export function deleteShiftEdit(empId: string, date: string): void {
   console.log('[AdminEdits] Deleting shift edit:', { empId, date });
-  
+
+  // Delete locally first so UI updates immediately
+  deleteShiftEditFromLocal(empId, date);
+
   // Delete from Firebase first (primary)
   setShiftEdit({
     empId,
@@ -78,12 +112,12 @@ export function deleteShiftEdit(empId: string, date: string): void {
     console.error('[AdminEdits] Failed to delete shift edit from Firebase:', err);
     alert('❌ Не удалось удалить правку смены из Firebase. Проверьте соединение.');
   });
-  
+
   // Also delete associated shift notes
   deleteShiftNotes(`${empId}-${date}`).catch((err) => {
     console.error('[AdminEdits] Failed to delete shift notes from Firebase:', err);
   });
-  
+
   // Sync deletion to Apps Script as async task
   syncShiftDeleteToServer(empId, date).catch(err => {
     console.error('[AdminEdits] Apps Script delete sync failed:', err);
@@ -170,6 +204,18 @@ export function saveEmpPrefs(pref: EmpPrefs): void {
     console.log('[AdminEdits] Employee prefs saved to Firebase successfully');
     globalPrefsSyncError = false;
     globalPrefsSyncErrorMsg = '';
+
+    // Persist locally as well, so prefs stay visible even if Firebase is later unavailable.
+    const all = loadEmpPrefs();
+    const idx = all.findIndex(e => e.empId === pref.empId);
+    if (idx >= 0) all[idx] = { ...all[idx], ...pref };
+    else all.push(pref);
+    try {
+      localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
+      console.log('[AdminEdits] Employee prefs saved to localStorage (cache)');
+    } catch (e) {
+      console.error('[AdminEdits] Failed to save prefs to localStorage:', e);
+    }
   }).catch((err) => {
     globalPrefsSyncError = true;
     globalPrefsSyncErrorMsg = '[AdminEdits] Failed to save employee prefs to Firebase: ' + (err instanceof Error ? err.message : String(err));
