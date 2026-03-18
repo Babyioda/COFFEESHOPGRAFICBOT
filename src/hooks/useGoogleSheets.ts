@@ -303,6 +303,8 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       // она сохраняется как обычно.
       if (existingIdx !== -1) {
         const existing = shifts[existingIdx];
+        const deptForRow = getDepartment(roleCell) ?? emp.department ?? 'kitchen';
+
         if (shiftsWithTimes && shiftsWithTimes.length > 0) {
           // Обновляем со смен с временем
           shifts[existingIdx] = { ...existing, shiftsWithTimes };
@@ -310,17 +312,37 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
           // Обновляем с несколькими смен и общим количеством часов
           shifts[existingIdx] = { ...existing, hours, multipleShifts };
         } else if (hours && hours > 0) {
-          // Обновляем/добавляем только поле hours, не убирая существующую смену
-          shifts[existingIdx] = { ...existing, hours };
+          // Если уже был найден другой числовой часовойчёт, нужно сложить по департаментам.
+          const existingDept = getDepartment(existing.role ?? emp.role) ?? deptForRow;
+          const existingShifts: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number }> = [];
+
+          if (existing.multipleShifts && existing.multipleShifts.length > 0) {
+            existingShifts.push(...existing.multipleShifts);
+          } else if (existing.hours && existing.hours > 0) {
+            existingShifts.push({ dept: existingDept, hours: existing.hours });
+          }
+
+          existingShifts.push({ dept: deptForRow, hours });
+          const total = existingShifts.reduce((sum, s) => sum + s.hours, 0);
+
+          shifts[existingIdx] = {
+            ...existing,
+            hours: total,
+            multipleShifts: existingShifts,
+          };
         } else if (shift !== 'off' && existing.shift === 'off') {
           // Новая информация — рабочая смена, прежняя была off
           shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
         }
       } else {
+        const deptForRow = getDepartment(roleCell) ?? emp.department ?? 'kitchen';
         const newEntry: any = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
         if (shiftsWithTimes && shiftsWithTimes.length > 0) newEntry.shiftsWithTimes = shiftsWithTimes;
         else if (multipleShifts && multipleShifts.length > 0) newEntry.multipleShifts = multipleShifts;
-        if (hours && hours > 0) newEntry.hours = hours;
+        if (hours && hours > 0) {
+          newEntry.hours = hours;
+          newEntry.multipleShifts = [{ dept: deptForRow, hours }];
+        }
         shifts.push(newEntry as any);
       }
     }
