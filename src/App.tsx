@@ -238,6 +238,12 @@ function AppInner() {
     fetchSheetForMonth(sheetId, month, year);
   }, [sheetId, fetchSheetForMonth]);
 
+  const handleRefresh = useCallback((month?: number, year?: number) => {
+    const m = month ?? viewMonth;
+    const y = year ?? viewYear;
+    fetchSheetForMonth(sheetId, m, y);
+  }, [sheetId, viewMonth, viewYear, fetchSheetForMonth]);
+
   // ── Первичная загрузка — получаем список листов, потом данные текущего месяца ──
   useEffect(() => {
     if (!sheetId) return;
@@ -410,7 +416,7 @@ function AppInner() {
             onSave={handleSaveSettings}
             lastSync={lastSync}
             isLoading={liveLoading}
-            onRefresh={() => fetchSheetForMonth(sheetId, viewMonth, viewYear)}
+            onRefresh={handleRefresh}
             error={liveError}
             onFakeDateChange={handleFakeDateChange}
             onLinkedEmpChange={(id) => {

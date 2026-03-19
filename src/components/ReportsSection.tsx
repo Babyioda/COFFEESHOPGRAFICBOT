@@ -121,9 +121,10 @@ function getShiftSegments(shift: ShiftEntry, emp: Employee): Array<{ role: strin
 interface ReportsSectionProps {
   data: ScheduleData;
   linkedEmpId: string | null;
+  onRefresh?: (month: number, year: number) => void;
 }
 
-export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpId }) => {
+export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpId, onRefresh }) => {
   const { isDark } = useTheme();
   const now = new Date();
 
@@ -176,6 +177,11 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
 
   const monthLabel = `${MONTHS_RU[month.getMonth()]} ${month.getFullYear()}`;
 
+  const refresh = () => {
+    if (!onRefresh) return;
+    onRefresh(month.getMonth() + 1, month.getFullYear());
+  };
+
   return (
     <div className="space-y-4 pb-6">
       <div className="flex items-center justify-between">
@@ -185,7 +191,16 @@ export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpI
         >
           ‹
         </button>
-        <div className={`text-sm font-semibold ${lbl}`}>{monthLabel}</div>
+        <div className="flex items-center gap-2">
+          <div className={`text-sm font-semibold ${lbl}`}>{monthLabel}</div>
+          <button
+            onClick={refresh}
+            title="Обновить данные"
+            className={`w-9 h-9 rounded-xl border flex items-center justify-center text-lg transition-all active:scale-95 ${isDark ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-gray-200 bg-white text-gray-600'}`}
+          >
+            ⟳
+          </button>
+        </div>
         <button
           onClick={() => changeMonth(1)}
           className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg font-bold transition-all active:scale-95 ${isDark ? 'border-slate-700 bg-slate-900 text-slate-200' : 'border-gray-200 bg-white text-gray-600'}`}

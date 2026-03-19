@@ -240,10 +240,37 @@ function saveEmpPrefsToLocal(pref: EmpPrefs): void {
   }
 }
 
+function mergePrefs(local: EmpPrefs, remote: EmpPrefs): EmpPrefs {
+  return {
+    empId: remote.empId ?? local.empId,
+    showTelegram: remote.showTelegram !== undefined ? remote.showTelegram : local.showTelegram,
+    tgUsername: remote.tgUsername !== undefined ? remote.tgUsername : local.tgUsername,
+    birthday: remote.birthday !== undefined ? remote.birthday : local.birthday,
+    customUsername: remote.customUsername !== undefined ? remote.customUsername : local.customUsername,
+  };
+}
+
 export function cacheEmpPrefs(prefs: EmpPrefs[]): void {
   try {
-    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(prefs));
-    console.log('[AdminEdits] Cached employee prefs to localStorage (from remote)', prefs.length);
+    const localPrefs = loadEmpPrefs();
+    const localMap: Record<string, EmpPrefs> = {};
+    for (const lp of localPrefs) {
+      if (lp.empId) localMap[lp.empId] = lp;
+    }
+
+    // Merge remote prefs into local ones, preserving local values when remote is missing fields
+    const merged: EmpPrefs[] = prefs.map(remote => {
+      const local = localMap[remote.empId] || { empId: remote.empId } as EmpPrefs;
+      return mergePrefs(local, remote);
+    });
+
+    // Include any local-only prefs that are not in remote list (e.g. pending local updates)
+    for (const lp of localPrefs) {
+      if (!merged.find(p => p.empId === lp.empId)) merged.push(lp);
+    }
+
+    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(merged));
+    console.log('[AdminEdits] Cached employee prefs to localStorage (merged remote+local)', merged.length);
   } catch (e) {
     console.error('[AdminEdits] Failed to cache employee prefs to localStorage:', e);
   }

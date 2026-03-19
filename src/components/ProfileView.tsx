@@ -9,7 +9,7 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
+import { saveEmpNote, getEmpNote, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId, getPrefsSyncError } from '../utils/adminEdits';
 import { fetchEmployeeNotes, testFullFirebase, testFirestoreIndexError } from '../utils/firebase';
 import { watchEmpPrefs, watchEmpNotes } from '../utils/firebase';
 
@@ -348,52 +348,74 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       {/* Личные пользовательские настройки */}
       {linkedEmp && prefsLoaded && (
         <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>  
-          <h3 className={`font-bold text-sm mb-3 ${lbl}`}>⚙️ Личные настройки</h3>
-          <div className="space-y-3">
-            <div>
-              <label className={`text-xs font-semibold mb-1 block ${sub}`}>День рождения</label>
-              <input
-                type="date"
-                value={birthdayInput}
-                onChange={e => setBirthdayInput(e.target.value)}
-                className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
-              />
-              <p className="text-[10px] text-gray-500">Год игнорируется</p>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className={`font-bold text-sm ${lbl}`}>⚙️ Личные настройки</h3>
+            <div className="text-[11px] font-semibold">
+              {getPrefsSyncError().error ? (
+                <span className="text-red-400">❌ Ошибка синхронизации</span>
+              ) : (
+                <span className="text-emerald-400">✅ Синхронизировано</span>
+              )}
             </div>
-            <button
-              onClick={async () => {
-                if (!linkedEmp) return;
-                try {
-                  const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
-                  
-                  console.log('[ProfileView] Saving employee prefs...', { 
-                    empId: linkedEmp.id, 
-                    birthday: mmdd,
-                  });
-                  
-                  // Save to both localStorage and Firebase
-                  saveEmpPrefs({ 
-                    empId: linkedEmp.id, 
-                    birthday: mmdd,
-                  });
-                  
-                  // Update object for immediate effect
-                  linkedEmp.birthday = mmdd;
-                  if (updateEmployee) {
-                    updateEmployee({...linkedEmp});
-                  }
-                  
-                  console.log('[ProfileView] Employee prefs saved successfully');
-                  alert('✅ Настройки сохранены');
-                } catch (err) {
-                  console.error('[ProfileView] Error saving prefs:', err);
-                  alert('❌ Ошибка при сохранении: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                  // State remains intact - user can retry
-                }
-              }}
-              className="w-full py-2 rounded-xl bg-indigo-500 text-white text-sm active:scale-95 transition-all"
-            >Сохранить</button>
           </div>
+
+          {isAdmin ? (
+            <div className="space-y-3">
+              <div>
+                <label className={`text-xs font-semibold mb-1 block ${sub}`}>День рождения</label>
+                <input
+                  type="date"
+                  value={birthdayInput}
+                  onChange={e => setBirthdayInput(e.target.value)}
+                  className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
+                />
+                <p className="text-[10px] text-gray-500">Год игнорируется</p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!linkedEmp) return;
+                  try {
+                    const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
+                    
+                    console.log('[ProfileView] Saving employee prefs...', { 
+                      empId: linkedEmp.id, 
+                      birthday: mmdd,
+                    });
+                    
+                    // Save to both localStorage and Firebase
+                    saveEmpPrefs({ 
+                      empId: linkedEmp.id, 
+                      birthday: mmdd,
+                    });
+                    
+                    // Update object for immediate effect
+                    linkedEmp.birthday = mmdd;
+                    if (updateEmployee) {
+                      updateEmployee({...linkedEmp});
+                    }
+                    
+                    console.log('[ProfileView] Employee prefs saved successfully');
+                    alert('✅ Настройки сохранены');
+                  } catch (err) {
+                    console.error('[ProfileView] Error saving prefs:', err);
+                    alert('❌ Ошибка при сохранении: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                    // State remains intact - user can retry
+                  }
+                }}
+                className="w-full py-2 rounded-xl bg-indigo-500 text-white text-sm active:scale-95 transition-all"
+              >Сохранить</button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div>
+                <p className={`text-xs font-semibold mb-1 ${sub}`}>День рождения</p>
+                <p className={`text-sm ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
+                  {linkedEmp.birthday ? linkedEmp.birthday.split('-').reverse().join('.') : 'Не указано'}
+                </p>
+                <p className="text-[10px] text-gray-500">Изменение дня рождения доступно только администратору</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -993,7 +1015,8 @@ interface ProfileViewProps {
   appsScriptUrl?: string;
   onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string) => void;
   lastSync: string | null;
-  isLoading: boolean; onRefresh: () => void;
+  isLoading: boolean;
+  onRefresh: (month?: number, year?: number) => void;
   error: string | null;
   onFakeDateChange: (d: Date | null) => void;
   onLinkedEmpChange: (id: string | null) => void;
@@ -1246,7 +1269,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
       {/* Контент */}
       {activeSection === 'reports' && (
-        <ReportsSection data={data} linkedEmpId={linkedEmpId} />
+        <ReportsSection data={data} linkedEmpId={linkedEmpId} onRefresh={onRefresh} />
       )}
 
       {activeSection === 'staff' && (
