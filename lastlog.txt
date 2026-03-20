@@ -4,14 +4,14 @@ telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_theme
 telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_viewport 
 telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_safe_area 
 telegram-web-app.js:135 [Telegram.WebView] > postEvent web_app_request_content_safe_area 
-(index):17 [2026-03-20T07:34:39.890Z]  @firebase/firestore: Firestore (10.14.1): enableIndexedDbPersistence() will be deprecated in the future, you can use `FirestoreSettings.cache` instead.
+(index):17 [2026-03-20T07:37:38.244Z]  @firebase/firestore: Firestore (10.14.1): enableIndexedDbPersistence() will be deprecated in the future, you can use `FirestoreSettings.cache` instead.
 mI @ (index):17
 warn @ (index):17
 Ia @ (index):25
 bC @ (index):38
 (anonymous) @ (index):39
-
 (index):54 [Main] Starting app initialization...
+
 content-script.js:22 Document already loaded, running initialization immediately
 content-script.js:4 Attempting to initialize AdUnit
 content-script.js:6 AdUnit initialized successfully
@@ -51,44 +51,42 @@ M @ (index):9
 (index):53 [App] Using Apps Script: https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec
 (index):53 [App] Fetching from Apps Script: https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec?sheet=%D0%9C%D0%90%D0%A0%D0%A2%202026
 (index):39 ✅ [Firebase] employee_notes: 3 documents
-(index):38 ✅ [Firebase] shift_notes: Write successful (docId: DDVeTvYDU25SNdU80sod)
+(index):38 ✅ [Firebase] shift_notes: Write successful (docId: EulOc2yKiCtx4jkWmzIW)
 (index):38 📖 [Firebase] Reading from shift_notes...
 (index):39 ✅ [Firebase] shift_notes: 13 documents
 (index):38 ✅ [Firebase] shift_notes: Read successful (found 6 test documents)
-(index):38 🔎 [Firebase] shift_notes: Sample doc data: {shiftId: 'test-shift-123', text: 'Test note', authorId: 'test-user', testFlag: true, createdAt: Vt}
-(index):38 ✏️ [Firebase] Updating shift_notes/DDVeTvYDU25SNdU80sod...
-(index):38 ✅ [Firebase] shift_notes: Update successful
-(index):38 🗑️ [Firebase] Deleting shift_notes/DDVeTvYDU25SNdU80sod...
+(index):38 🔎 [Firebase] shift_notes: Sample doc data: {shiftId: 'test-shift-123', text: 'Test note', authorId: 'test-user', testFlag: true, createdAt: Ot}
+(index):38 ✏️ [Firebase] Updating shift_notes/EulOc2yKiCtx4jkWmzIW...
 (index):39 ✅ [Firebase] shifts: 0 documents
+(index):38 ✅ [Firebase] shift_notes: Update successful
+(index):38 🗑️ [Firebase] Deleting shift_notes/EulOc2yKiCtx4jkWmzIW...
+(index):39 ✅ [Firebase] shift_edits: 8 documents
 (index):38 ✅ [Firebase] shift_notes: Delete successful
 (index):38 📝 [Firebase] Writing to employee_notes...
-(index):39 ✅ [Firebase] shift_edits: 8 documents
 (index):39 ✅ [Firebase] emp_notes: 0 documents
-(index):38 ✅ [Firebase] employee_notes: Write successful (docId: l8FVuDTwhLIoa4vxx4lj)
+(index):38 ✅ [Firebase] employee_notes: Write successful (docId: mRybCc0pt07TkdkKRb1k)
 (index):38 📖 [Firebase] Reading from employee_notes...
 (index):39 ✅ [Firebase] emp_prefs: 0 documents
 (index):38 ✅ [Firebase] employee_notes: Read successful (found 1 test documents)
-(index):38 🔎 [Firebase] employee_notes: Sample doc data: {employeeId: 'test-emp-456', text: 'Employee test note', authorId: 'test-user', testFlag: true, createdAt: Vt}
-(index):38 ✏️ [Firebase] Updating employee_notes/l8FVuDTwhLIoa4vxx4lj...
-(index):38 ✅ [Firebase] employee_notes: Update successful
-(index):38 🗑️ [Firebase] Deleting employee_notes/l8FVuDTwhLIoa4vxx4lj...
+(index):38 🔎 [Firebase] employee_notes: Sample doc data: {employeeId: 'test-emp-456', text: 'Employee test note', authorId: 'test-user', testFlag: true, createdAt: Ot}
+(index):38 ✏️ [Firebase] Updating employee_notes/mRybCc0pt07TkdkKRb1k...
 (index):39 ✅ [Firebase] user_links: 8 documents
 (index):39 ✨ [Firebase] Test completed successfully!
+(index):38 ✅ [Firebase] employee_notes: Update successful
+(index):38 🗑️ [Firebase] Deleting employee_notes/mRybCc0pt07TkdkKRb1k...
 (index):38 ✅ [Firebase] employee_notes: Delete successful
 (index):38 📝 [Firebase] Writing to shifts...
-(index):38 ✅ [Firebase] shifts: Write successful (docId: mvXxH8hD5imtLEfJ4CBB)
-(index):38 📖 [Firebase] Reading from shifts...
 (index):53 [useGoogleSheets] Загружено сотрудников: 31
 (index):53 [useGoogleSheets] 🎂 Sample employee data: (3) [{…}, {…}, {…}]
 (index):54 [App] 🔍 Raw employee data from script: (31) [{…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}, {…}]
 (index):54 [App] ✅ Loaded data map: 31 employees
 (index):54 [App] 🔍 Map contents (sample): (5) [Array(2), Array(2), Array(2), Array(2), Array(2)]
+(index):54 [App] 📂 employeeDataMap updated, reloading sheet with birthday data...
 (index):53 [App] Fetching sheet for month: {id: '1n5FzbrDQKp_kYCbCQ6DIMmXMWadwcbl7ccrWAzBJEiY', month: 3, year: 2026, gid: '0'}
 (index):53 [App] Using Apps Script: https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec
 (index):53 [App] Fetching from Apps Script: https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec?sheet=%D0%9C%D0%90%D0%A0%D0%A2%202026
-(index):38 ✅ [Firebase] shifts: Read successful (found 1 test documents)
-(index):38 🔎 [Firebase] shifts: Sample doc data: {employeeId: 'test-emp-456', start: Vt, visible: true, testFlag: true, createdAt: Vt}
-(index):38 ✏️ [Firebase] Updating shifts/mvXxH8hD5imtLEfJ4CBB...
+(index):38 ✅ [Firebase] shifts: Write successful (docId: rpPF6DCy9ifrk7bOjOBA)
+(index):38 📖 [Firebase] Reading from shifts...
 (index):53 [App] Apps Script returned: 73 rows
 (index):54 [App] 🔍 Searching for "Зайкова Евгения" (зайкова евгения) in map... Found: false
 (index):54 [App] ❌ No data found for "Зайкова Евгения" in employeeDataMap (size: 0)
@@ -174,26 +172,24 @@ M @ (index):9
 (index):54 [App] ❌ No data found for "Олюнина Дарья" in employeeDataMap (size: 0)
 (index):54 [App] 🎂 Employees with birthdays: нет
 (index):54 [App] Sheet loaded successfully: {employees: 41, shifts: 1271}
+(index):38 ✅ [Firebase] shifts: Read successful (found 1 test documents)
+(index):38 🔎 [Firebase] shifts: Sample doc data: {employeeId: 'test-emp-456', start: Ot, visible: true, testFlag: true, createdAt: Ot}
+(index):38 ✏️ [Firebase] Updating shifts/rpPF6DCy9ifrk7bOjOBA...
 (index):38 ✅ [Firebase] shifts: Update successful
-(index):38 🗑️ [Firebase] Deleting shifts/mvXxH8hD5imtLEfJ4CBB...
+(index):38 🗑️ [Firebase] Deleting shifts/rpPF6DCy9ifrk7bOjOBA...
 (index):38 ✅ [Firebase] shifts: Delete successful
 (index):38 📝 [Firebase] Writing to emp_notes...
-(index):38 ✅ [Firebase] emp_notes: Write successful (docId: e8K0bmqjAiAqRvXJBN5E)
+(index):38 ✅ [Firebase] emp_notes: Write successful (docId: ZzKNnhiWUNzC3sHLSBHL)
 (index):38 📖 [Firebase] Reading from emp_notes...
 (index):38 ✅ [Firebase] emp_notes: Read successful (found 1 test documents)
-(index):38 🔎 [Firebase] emp_notes: Sample doc data: {employeeId: 'test-emp-456', text: 'Test emp note', authorId: 'test-user', testFlag: true, createdAt: Vt}
-(index):38 ✏️ [Firebase] Updating emp_notes/e8K0bmqjAiAqRvXJBN5E...
+(index):38 🔎 [Firebase] emp_notes: Sample doc data: {employeeId: 'test-emp-456', text: 'Test emp note', authorId: 'test-user', testFlag: true, createdAt: Ot}
+(index):38 ✏️ [Firebase] Updating emp_notes/ZzKNnhiWUNzC3sHLSBHL...
 (index):38 ✅ [Firebase] emp_notes: Update successful
-(index):38 🗑️ [Firebase] Deleting emp_notes/e8K0bmqjAiAqRvXJBN5E...
+(index):38 🗑️ [Firebase] Deleting emp_notes/ZzKNnhiWUNzC3sHLSBHL...
 (index):38 ✅ [Firebase] emp_notes: Delete successful
 (index):38 📝 [Firebase] Writing to shift_edits...
-(index):38 ✅ [Firebase] shift_edits: Write successful (docId: afHk9gSxSbirJLdOiv7m)
+(index):38 ✅ [Firebase] shift_edits: Write successful (docId: Y1M7WMJHOOyZKrEEsHjY)
 (index):38 📖 [Firebase] Reading from shift_edits...
-(index):38 ✅ [Firebase] shift_edits: Read successful (found 1 test documents)
-(index):38 🔎 [Firebase] shift_edits: Sample doc data: {shiftId: 'test-shift-123', editorId: 'test-user', changes: {…}, testFlag: true, createdAt: Vt}
-(index):38 ✏️ [Firebase] Updating shift_edits/afHk9gSxSbirJLdOiv7m...
-(index):38 ✅ [Firebase] shift_edits: Update successful
-(index):38 🗑️ [Firebase] Deleting shift_edits/afHk9gSxSbirJLdOiv7m...
 (index):53 [App] Apps Script returned: 73 rows
 (index):54 [App] 🔍 Searching for "Зайкова Евгения" (зайкова евгения) in map... Found: false
 (index):54 [App] ❌ No data found for "Зайкова Евгения" in employeeDataMap (size: 0)
@@ -279,19 +275,283 @@ M @ (index):9
 (index):54 [App] ❌ No data found for "Олюнина Дарья" in employeeDataMap (size: 0)
 (index):54 [App] 🎂 Employees with birthdays: нет
 (index):54 [App] Sheet loaded successfully: {employees: 41, shifts: 1271}
+(index):38 ✅ [Firebase] shift_edits: Read successful (found 1 test documents)
+(index):38 🔎 [Firebase] shift_edits: Sample doc data: {shiftId: 'test-shift-123', editorId: 'test-user', changes: {…}, testFlag: true, createdAt: Ot}
+(index):38 ✏️ [Firebase] Updating shift_edits/Y1M7WMJHOOyZKrEEsHjY...
+(index):38 ✅ [Firebase] shift_edits: Update successful
+(index):38 🗑️ [Firebase] Deleting shift_edits/Y1M7WMJHOOyZKrEEsHjY...
 (index):38 ✅ [Firebase] shift_edits: Delete successful
 (index):38 📝 [Firebase] Writing to user_links...
-(index):38 ✅ [Firebase] user_links: Write successful (docId: KclDEtkObpxDwmgjwMot)
+(index):38 ✅ [Firebase] user_links: Write successful (docId: uV1KrepGvIPRBHVx4sqc)
 (index):38 📖 [Firebase] Reading from user_links...
 (index):38 ✅ [Firebase] user_links: Read successful (found 1 test documents)
-(index):38 🔎 [Firebase] user_links: Sample doc data: {uid: 'test-uid', empId: 'test-emp-456', testFlag: true, createdAt: Vt}
-(index):38 ✏️ [Firebase] Updating user_links/KclDEtkObpxDwmgjwMot...
+(index):38 🔎 [Firebase] user_links: Sample doc data: {uid: 'test-uid', empId: 'test-emp-456', testFlag: true, createdAt: Ot}
+(index):38 ✏️ [Firebase] Updating user_links/uV1KrepGvIPRBHVx4sqc...
 (index):38 ✅ [Firebase] user_links: Update successful
-(index):38 🗑️ [Firebase] Deleting user_links/KclDEtkObpxDwmgjwMot...
+(index):38 🗑️ [Firebase] Deleting user_links/uV1KrepGvIPRBHVx4sqc...
 (index):38 ✅ [Firebase] user_links: Delete successful
 (index):38 
 📊 [Firebase] Test Summary: 6/6 collections passed all tests
 (index):39 [Firebase] Detailed Results: (6) [{…}, {…}, {…}, {…}, {…}, {…}]
+(index):53 [App] Apps Script returned: 73 rows
+(index):54 [App] 🔍 Searching for "Зайкова Евгения" (зайкова евгения) in map... Found: false
+(index):54 [App] ❌ No data found for "Зайкова Евгения" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Шишмарева Галина" (шишмарева галина) in map... Found: false
+(index):54 [App] ❌ No data found for "Шишмарева Галина" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Вульчинский Кирилл" (вульчинский кирилл) in map... Found: false
+(index):54 [App] ❌ No data found for "Вульчинский Кирилл" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Шмакова Милена" (шмакова милена) in map... Found: false
+(index):54 [App] ❌ No data found for "Шмакова Милена" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Буняев Кирилл" (буняев кирилл) in map... Found: false
+(index):54 [App] ❌ No data found for "Буняев Кирилл" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Печенкина Марина" (печенкина марина) in map... Found: false
+(index):54 [App] ❌ No data found for "Печенкина Марина" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Лисовец Елизавета" (лисовец елизавета) in map... Found: false
+(index):54 [App] ❌ No data found for "Лисовец Елизавета" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Овчаренко Владимир" (овчаренко владимир) in map... Found: false
+(index):54 [App] ❌ No data found for "Овчаренко Владимир" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Колодин Богдан" (колодин богдан) in map... Found: false
+(index):54 [App] ❌ No data found for "Колодин Богдан" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Брагина Александра" (брагина александра) in map... Found: false
+(index):54 [App] ❌ No data found for "Брагина Александра" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Усов Виктор" (усов виктор) in map... Found: false
+(index):54 [App] ❌ No data found for "Усов Виктор" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Суворов Ярослав" (суворов ярослав) in map... Found: false
+(index):54 [App] ❌ No data found for "Суворов Ярослав" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Кислер Елена" (кислер елена) in map... Found: false
+(index):54 [App] ❌ No data found for "Кислер Елена" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Тайлер Дерден" (тайлер дерден) in map... Found: false
+(index):54 [App] ❌ No data found for "Тайлер Дерден" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Иголкина Марина" (иголкина марина) in map... Found: false
+(index):54 [App] ❌ No data found for "Иголкина Марина" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Иванова Юлианна" (иванова юлианна) in map... Found: false
+(index):54 [App] ❌ No data found for "Иванова Юлианна" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Романюк Павел" (романюк павел) in map... Found: false
+(index):54 [App] ❌ No data found for "Романюк Павел" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Капля Валерия" (капля валерия) in map... Found: false
+(index):54 [App] ❌ No data found for "Капля Валерия" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Иванина Анастасия" (иванина анастасия) in map... Found: false
+(index):54 [App] ❌ No data found for "Иванина Анастасия" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Агеева Дарья" (агеева дарья) in map... Found: false
+(index):54 [App] ❌ No data found for "Агеева Дарья" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Шмаков Радислав" (шмаков радислав) in map... Found: false
+(index):54 [App] ❌ No data found for "Шмаков Радислав" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Ярош Алёна" (ярош алёна) in map... Found: false
+(index):54 [App] ❌ No data found for "Ярош Алёна" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Мартель Анастасия" (мартель анастасия) in map... Found: false
+(index):54 [App] ❌ No data found for "Мартель Анастасия" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Кауфман Кирилл" (кауфман кирилл) in map... Found: false
+(index):54 [App] ❌ No data found for "Кауфман Кирилл" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Черемисова Карина" (черемисова карина) in map... Found: false
+(index):54 [App] ❌ No data found for "Черемисова Карина" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Ляшенко Валерия" (ляшенко валерия) in map... Found: false
+(index):54 [App] ❌ No data found for "Ляшенко Валерия" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Бучинскас Богдан" (бучинскас богдан) in map... Found: false
+(index):54 [App] ❌ No data found for "Бучинскас Богдан" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Яровой Владислав" (яровой владислав) in map... Found: false
+(index):54 [App] ❌ No data found for "Яровой Владислав" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Токарев Илья" (токарев илья) in map... Found: false
+(index):54 [App] ❌ No data found for "Токарев Илья" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Максимова Жанна" (максимова жанна) in map... Found: false
+(index):54 [App] ❌ No data found for "Максимова Жанна" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Рахманкулов Ержан" (рахманкулов ержан) in map... Found: false
+(index):54 [App] ❌ No data found for "Рахманкулов Ержан" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Чемезова Ирина" (чемезова ирина) in map... Found: false
+(index):54 [App] ❌ No data found for "Чемезова Ирина" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Андреева Кристина" (андреева кристина) in map... Found: false
+(index):54 [App] ❌ No data found for "Андреева Кристина" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Мурылев Андрей" (мурылев андрей) in map... Found: false
+(index):54 [App] ❌ No data found for "Мурылев Андрей" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Ролдугина Наталья" (ролдугина наталья) in map... Found: false
+(index):54 [App] ❌ No data found for "Ролдугина Наталья" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Антонович Оксана" (антонович оксана) in map... Found: false
+(index):54 [App] ❌ No data found for "Антонович Оксана" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Скулинец Людмила" (скулинец людмила) in map... Found: false
+(index):54 [App] ❌ No data found for "Скулинец Людмила" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Меликян София" (меликян софия) in map... Found: false
+(index):54 [App] ❌ No data found for "Меликян София" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Матусевич Денис" (матусевич денис) in map... Found: false
+(index):54 [App] ❌ No data found for "Матусевич Денис" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Свиридова Лидия" (свиридова лидия) in map... Found: false
+(index):54 [App] ❌ No data found for "Свиридова Лидия" in employeeDataMap (size: 0)
+(index):54 [App] 🔍 Searching for "Олюнина Дарья" (олюнина дарья) in map... Found: false
+(index):54 [App] ❌ No data found for "Олюнина Дарья" in employeeDataMap (size: 0)
+(index):54 [App] 🎂 Employees with birthdays: нет
+(index):54 [App] Sheet loaded successfully: {employees: 41, shifts: 1271}
+(index):39 [DayModal] Setting up Firebase listeners
+(index):39 [Firebase] Watch shift_edits updated: 8 items
+(index):39 [DayModal] Shift edits updated: {emp_зайкова_евгения-2026-03-18: {…}, emp_иголкина_марина-2026-03-18: {…}, emp_овчаренко_владимир-2026-03-19: {…}, emp_романюк_павел-2026-03-18: {…}, emp_тайлер_дерден-2026-03-18: {…}, …}
+(index):39 [Firebase] Watch emp_notes updated: 0 items
+(index):39 [DayModal] Emp notes updated: {}
+(index):39 [Firebase] Watch: 12 total shift notes
+(index):39 [DayModal] Shift notes updated: {emp_шмакова_милена-2026-03-18: '.', emp_иголкина_марина-2026-03-18: 'с 17 до 20 будет курить в коморке', test-shift-123: 'Test note', emp_романюк_павел-2026-03-18: 'с 10 до 15 будет сидеть на складе', emp_тайлер_дерден-2026-03-18: 'кто это', …}
+(index):53 [App] Fetching sheet for month: {id: '1n5FzbrDQKp_kYCbCQ6DIMmXMWadwcbl7ccrWAzBJEiY', month: 3, year: 2026, gid: '0'}
+(index):53 [App] Using Apps Script: https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec
+(index):53 [App] Fetching from Apps Script: https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec?sheet=%D0%9C%D0%90%D0%A0%D0%A2%202026
+(index):22  GET https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=gzkhuXB_BBPj1MMh2NPVD6XB2oPqs1jW_JTT3dp9bIz8NqawBshI0g&VER=8&database=projects%2Fcsc-bd-30c56%2Fdatabases%2F(default)&RID=rpc&SID=RW0LRw6GE4lCeRJ7lHpwIw&AID=0&CI=0&TYPE=xmlhttp&zx=1j75v3sys1ap&t=1 net::ERR_HTTP2_PING_FAILED 200 (OK)
+r.send @ (index):22
+r.ea @ (index):24
+Xs @ (index):21
+mu @ (index):25
+r.Fa @ (index):25
+N @ (index):17
+Promise.then
+K @ (index):17
+fu @ (index):25
+Vs @ (index):22
+Os.Y @ (index):21
+Os.ca @ (index):21
+tn @ (index):17
+et @ (index):17
+lu @ (index):24
+r.bb @ (index):24
+r.Ea @ (index):24
+$i @ (index):23
+r.Pa @ (index):22
+Promise.then
+Qa @ (index):22
+r.Sa @ (index):22
+Promise.then
+r.send @ (index):22
+r.ea @ (index):24
+Xs @ (index):21
+qr @ (index):21
+r.Ga @ (index):25
+N @ (index):17
+Promise.then
+K @ (index):17
+Xa @ (index):25
+r.connect @ (index):25
+Nn.m @ (index):25
+Io @ (index):33
+send @ (index):33
+a_ @ (index):33
+p_ @ (index):33
+FN @ (index):34
+(anonymous) @ (index):33
+(anonymous) @ (index):33
+(anonymous) @ (index):37
+(anonymous) @ (index):37
+Promise.then
+gu @ (index):37
+enqueue @ (index):37
+enqueueAndForget @ (index):37
+(anonymous) @ (index):33
+(anonymous) @ (index):33
+wo @ (index):33
+(anonymous) @ (index):33
+setTimeout
+Bo @ (index):33
+T_ @ (index):33
+P_ @ (index):33
+(anonymous) @ (index):33
+Promise.then
+auth @ (index):33
+start @ (index):33
+start @ (index):33
+ET @ (index):34
+Hc @ (index):34
+await in Hc
+rC @ (index):37
+await in rC
+(anonymous) @ (index):38
+await in (anonymous)
+(anonymous) @ (index):37
+(anonymous) @ (index):37
+Promise.then
+gu @ (index):37
+enqueue @ (index):37
+enqueueAndForget @ (index):37
+(anonymous) @ (index):38
+zd @ (index):38
+Xc @ (index):38
+$p @ (index):38
+(anonymous) @ (index):54
+Promise.then
+(anonymous) @ (index):54
+(index):22  GET https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=adRw5RjEA0QuVTyyYZx77KdywGGjv2ONTeEnrsyoRzZCDuLOmnM2jA&VER=8&database=projects%2Fcsc-bd-30c56%2Fdatabases%2F(default)&RID=rpc&SID=xIgmfcQ1wHWwFbicOj2ksA&AID=0&CI=0&TYPE=xmlhttp&zx=bc8btzs7oyi&t=1 net::ERR_HTTP2_PING_FAILED 200 (OK)
+r.send @ (index):22
+r.ea @ (index):24
+Xs @ (index):21
+mu @ (index):25
+r.Fa @ (index):25
+N @ (index):17
+Promise.then
+K @ (index):17
+fu @ (index):25
+Vs @ (index):22
+Os.Y @ (index):21
+Os.ca @ (index):21
+tn @ (index):17
+et @ (index):17
+lu @ (index):24
+r.bb @ (index):24
+r.Ea @ (index):24
+$i @ (index):23
+r.Pa @ (index):22
+Promise.then
+Qa @ (index):22
+r.Sa @ (index):22
+Promise.then
+r.send @ (index):22
+r.ea @ (index):24
+Xs @ (index):21
+qr @ (index):21
+r.Ga @ (index):25
+N @ (index):17
+Promise.then
+K @ (index):17
+Xa @ (index):25
+r.connect @ (index):25
+Nn.m @ (index):25
+Io @ (index):33
+send @ (index):33
+a_ @ (index):33
+A_ @ (index):33
+_p @ (index):34
+(anonymous) @ (index):34
+jN @ (index):34
+(anonymous) @ (index):33
+(anonymous) @ (index):33
+(anonymous) @ (index):37
+(anonymous) @ (index):37
+Promise.then
+gu @ (index):37
+enqueue @ (index):37
+enqueueAndForget @ (index):37
+(anonymous) @ (index):33
+(anonymous) @ (index):33
+wo @ (index):33
+(anonymous) @ (index):33
+setTimeout
+Bo @ (index):33
+T_ @ (index):33
+P_ @ (index):33
+(anonymous) @ (index):33
+Promise.then
+auth @ (index):33
+start @ (index):33
+vp @ (index):34
+yT @ (index):34
+RT @ (index):37
+await in RT
+eC @ (index):37
+TT @ (index):37
+(anonymous) @ (index):37
+(anonymous) @ (index):37
+await in (anonymous)
+(anonymous) @ (index):37
+(anonymous) @ (index):37
+Promise.then
+gu @ (index):37
+enqueue @ (index):37
+enqueueAndForget @ (index):37
+pC @ (index):37
+rs @ (index):38
+jS @ (index):39
+(anonymous) @ (index):54
+Promise.then
+(anonymous) @ (index):54
 (index):53 [App] Apps Script returned: 73 rows
 (index):54 [App] 🔍 Searching for "Зайкова Евгения" (зайкова евгения) in map... Found: false
 (index):54 [App] ❌ No data found for "Зайкова Евгения" in employeeDataMap (size: 0)

@@ -246,7 +246,7 @@ function AppInner() {
     } finally {
       setLiveLoading(false);
     }
-  }, [sheetMap, sheetGid]);
+  }, [sheetMap, sheetGid, employeeDataMap]);
 
   // ── При смене месяца — загружаем нужный лист ──
   const handleMonthChange = useCallback((month: number, year: number) => {
