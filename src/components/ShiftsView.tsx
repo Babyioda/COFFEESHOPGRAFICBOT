@@ -1052,7 +1052,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             const birthdayCelebrants = getEmployeesBirthdayToday(data.employees, new Date(year, month-1, day));
 
             const myDeptColor = myRole ? getDeptColorByRole(myRole, '#6366f1') : '#6366f1';
-            const isMyWorking = !!myHours || myShift === 'daily' || myShift === 'day' || myShift === 'night';
+            const isMyWorking = !!myHours || myShift === 'daily' || myShift === 'day' || myShift === 'night' || (myEntry?.multipleShifts && myEntry.multipleShifts.length > 0);
 
             // Кастомное время для моей смены
             const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
@@ -1060,7 +1060,14 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             let myTimeStart = myCustom?.customStart ?? myTimes?.start;
             let myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
             let myShortTime: string | undefined = undefined;
-            if (myHours) {
+            let myMultipleShifts = myEntry?.multipleShifts;
+            
+            if (myMultipleShifts && myMultipleShifts.length > 0) {
+              // Если есть несколько смен — не переопределяем, будут отображены раздельно ниже
+              myTimeStart = undefined;
+              myTimeEnd = undefined;
+              myShortTime = undefined;
+            } else if (myHours) {
               myShortTime = `${myHours}ч`;
               myTimeStart = `${myHours} ч`;
               myTimeEnd = undefined;
@@ -1100,7 +1107,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
             const hasColleague = colleagueShifts.length > 0;
             const hasAnyShift  = allShifts.length > 0;
-            const hasOverlap   = isMyShift && hasColleague && (myTimes || myHours);
+            const hasOverlap   = isMyShift && hasColleague && (myTimes || myHours || (myMultipleShifts && myMultipleShifts.length > 0));
 
             return (
               <button
@@ -1138,32 +1145,66 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
                 <span className={`text-[12px] font-bold leading-tight ${isWeekend && !isMyShift ? 'text-rose-400' : ''}`}>{day}</span>
 
-                {isMyWorking && myTimeStart ? (
+                {isMyWorking && (myTimeStart || (myMultipleShifts && myMultipleShifts.length > 0)) ? (
                   <>
                     {hasOverlap ? (
-                      <div className="w-full px-0.5 mt-0.5">
-                        <div
-                          className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
-                          style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
-                        >
-                          {myShortTime}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-1">
-                        <div
-                          className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
-                          style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
-                        >
-                          {myTimeStart}
-                        </div>
-                        {myTimeEnd && (
+                      <div className="w-full px-0.5 mt-0.5 flex flex-col gap-[2px]">
+                        {myMultipleShifts && myMultipleShifts.length > 0 ? (
+                          myMultipleShifts.map((ms, idx) => {
+                            const deptCfg = DEPARTMENT_CONFIG[ms.dept];
+                            const deptIcon = deptCfg?.icon ? `${deptCfg.icon} ` : '';
+                            return (
+                              <div
+                                key={idx}
+                                className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                                style={{ backgroundColor: deptCfg?.color + '40', color: deptCfg?.color }}
+                              >
+                                {deptIcon}{ms.hours}ч
+                              </div>
+                            );
+                          })
+                        ) : (
                           <div
                             className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
                             style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
                           >
-                            {myTimeEnd}
+                            {myShortTime}
                           </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-1">
+                        {myMultipleShifts && myMultipleShifts.length > 0 ? (
+                          myMultipleShifts.map((ms, idx) => {
+                            const deptCfg = DEPARTMENT_CONFIG[ms.dept];
+                            const deptIcon = deptCfg?.icon ? `${deptCfg.icon} ` : '';
+                            return (
+                              <div
+                                key={idx}
+                                className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                                style={{ backgroundColor: deptCfg?.color + '40', color: deptCfg?.color }}
+                              >
+                                {deptIcon}{ms.hours}ч
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <>
+                            <div
+                              className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                              style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
+                            >
+                              {myTimeStart}
+                            </div>
+                            {myTimeEnd && (
+                              <div
+                                className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                                style={{ backgroundColor: myDeptColor + '40', color: myDeptColor }}
+                              >
+                                {myTimeEnd}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -1188,9 +1229,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                             items = c.multipleShifts.map(ms => {
                               const deptCfg = DEPARTMENT_CONFIG[ms.dept];
                               const deptIcon = deptCfg?.icon ? `${deptCfg.icon} ` : '';
-                              const text = ms.role 
-                                ? `${deptIcon}${ms.hours}ч ${ms.role.toLowerCase()}`
-                                : `${deptIcon}${ms.hours}ч`;
+                              const text = `${deptIcon}${ms.hours}ч`;
                               return {
                                 text,
                                 color: deptCfg?.color || c.color,
