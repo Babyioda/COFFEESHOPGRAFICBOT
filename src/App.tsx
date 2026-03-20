@@ -209,9 +209,13 @@ function AppInner() {
         if (empData) {
           emp.birthday = empData.birthday || undefined;
           emp.tgUsername = empData.tgUsername || undefined;
+          if (empData.birthday) {
+            console.log(`[App] 🎂 Applied birthday to ${emp.name}: ${empData.birthday}`);
+          }
         }
         return emp;
       });
+      console.log('[App] 🎂 Employees with birthdays:', parsed.employees.filter(e => e.birthday).map(e => `${e.name} (${e.birthday})`).join(', ') || 'нет');
       parsed.employees = employeesWithData;
       dataCache.set(cacheKey, parsed);
       setLiveData(parsed);

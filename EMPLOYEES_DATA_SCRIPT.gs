@@ -1,4 +1,4 @@
-/**
+  /**
  * Apps Script для получения данных сотрудников (Birthday, Telegram)
  * 
  * Лист "data" (gid: 1704913166):

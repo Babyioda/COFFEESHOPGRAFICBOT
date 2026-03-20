@@ -96,7 +96,11 @@ function getEmployeesBirthdayToday(employees: Employee[], date: Date): Employee[
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const todayMMDD = `${month}-${day}`;
-  return employees.filter(emp => emp.birthday === todayMMDD);
+  const result = employees.filter(emp => emp.birthday === todayMMDD);
+  if (result.length > 0) {
+    console.log(`[ShiftsView] 🎂 Found birthdays on ${todayMMDD}:`, result.map(e => e.name).join(', '));
+  }
+  return result;
 }
 
 // ── Edit Shift Modal ────────────────────────────────────────────────
