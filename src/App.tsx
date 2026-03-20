@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ShiftsView } from './components/ShiftsView';
 import { ProfileView } from './components/ProfileView';
-import { getTgUserId } from './utils/telegram';
-import { watchEmpPrefs } from './utils/firebase';
+import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey, fetchEmployeeData, EmployeeData } from './hooks/useGoogleSheets';
 import { ScheduleData, Employee } from './types/schedule';
 
 const ADMIN_TG_IDS = [783948887, 6147055724];
-import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey } from './hooks/useGoogleSheets';
+import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey, fetchEmployeeData, EmployeeData } from './hooks/useGoogleSheets';
 import { getEmpPrefs, getLinkedEmpId, saveLinkedEmpId, cacheEmpPrefs } from './utils/adminEdits';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
@@ -14,12 +13,14 @@ type TabId = 'shifts' | 'profile';
 
 const DEFAULT_SHEET_ID = '1n5FzbrDQKp_kYCbCQ6DIMmXMWadwcbl7ccrWAzBJEiY';
 const DEFAULT_SHEET_GID = '0';
-const STORAGE_KEY_ID    = 'ss_sheet_id';
-const STORAGE_KEY_GID   = 'ss_sheet_gid';
-const STORAGE_KEY_API    = 'ss_sheets_api_key';
-const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
-const STORAGE_FAKE_DATE  = 'ss_fake_date';
+const STORAGE_KEY_ID              = 'ss_sheet_id';
+const STORAGE_KEY_GID             = 'ss_sheet_gid';
+const STORAGE_KEY_API             = 'ss_sheets_api_key';
+const STORAGE_KEY_SCRIPT          = 'ss_apps_script_url';
+const STORAGE_KEY_EMPLOYEE_SCRIPT = 'ss_employee_data_script_url';
+const DEFAULT_SCRIPT_URL          = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
+const DEFAULT_EMPLOYEE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyKT6tqexp3816Nm7ROYS36GaMEK36lEr5VyTpm_H4LLSALv2iwV-RWxqmNDZDleW0H/exec';
+const STORAGE_FAKE_DATE           = 'ss_fake_date';
 
 if (!localStorage.getItem(STORAGE_KEY_ID)) {
   localStorage.setItem(STORAGE_KEY_ID, DEFAULT_SHEET_ID);
@@ -48,6 +49,15 @@ function AppInner() {
     }
     return stored;
   });
+  const [employeeDataScriptUrl, setEmployeeDataScriptUrl] = useState<string>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY_EMPLOYEE_SCRIPT);
+    if (!stored) {
+      localStorage.setItem(STORAGE_KEY_EMPLOYEE_SCRIPT, DEFAULT_EMPLOYEE_SCRIPT_URL);
+      return DEFAULT_EMPLOYEE_SCRIPT_URL;
+    }
+    return stored;
+  });
+  const [employeeDataMap, setEmployeeDataMap] = useState<Map<string, EmployeeData>>(new Map());
 
   // Текущий месяц для просмотра
   const today = new Date();
@@ -187,16 +197,16 @@ function AppInner() {
         console.log('[App] CSV fallback returned:', text.split('\n').length, 'rows');
       }
 
-      // merge any stored prefs
-      const prefs = parsed.employees.map(emp => {
-        const p = getEmpPrefs(emp.id);
-        if (p) {
-          if (p.showTelegram !== undefined) emp.showTelegram = p.showTelegram;
-          if (p.birthday) emp.birthday = p.birthday;
+      // Применяем данные сотрудников (Birthday, Telegram) по имени
+      const employeesWithData = parsed.employees.map(emp => {
+        const empData = employeeDataMap.get(emp.name.toLowerCase());
+        if (empData) {
+          emp.birthday = empData.birthday || undefined;
+          emp.tgUsername = empData.tgUsername || undefined;
         }
         return emp;
       });
-      parsed.employees = prefs;
+      parsed.employees = employeesWithData;
       dataCache.set(cacheKey, parsed);
       setLiveData(parsed);
       setLastSync(new Date().toISOString());
@@ -266,33 +276,37 @@ function AppInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetId]);
 
-  // ── Подписка на prefs (Telegram/birthday) из Firebase, чтобы изменения синхронизировались между устройствами ──
+  // ── Загрузка данных сотрудников (Birthday, Telegram) ──
   useEffect(() => {
-    const unsub = watchEmpPrefs((prefs) => {
-      cacheEmpPrefs(prefs);
-      setLiveData(prev => {
-        if (!prev) return prev;
-        const next = {
-          ...prev,
-          employees: prev.employees.map(emp => {
-            const p = prefs.find(x => x.empId === emp.id);
-            if (!p) return emp;
-            return {
-              ...emp,
-              showTelegram: p.showTelegram !== undefined ? p.showTelegram : emp.showTelegram,
-              birthday: p.birthday !== undefined ? p.birthday : emp.birthday,
-              tgUsername: p.tgUsername !== undefined ? p.tgUsername : emp.tgUsername,
-            };
-          }),
-        };
-        return next;
-      });
-    });
+    if (!employeeDataScriptUrl) {
+      console.log('[App] Employee data script URL не установлен');
+      return;
+    }
 
-    return () => { if (typeof unsub === 'function') unsub(); };
-  }, []);
+    const loadEmployeeData = async () => {
+      try {
+        const data = await fetchEmployeeData(employeeDataScriptUrl);
+        const map = new Map<string, EmployeeData>();
+        
+        for (const emp of data) {
+          map.set(emp.name.toLowerCase(), emp);
+        }
+        
+        setEmployeeDataMap(map);
+        console.log('[App] Загружены данные:', map.size, 'сотрудников');
+        
+        // Перезагружаем текущий месяц, чтобы применить новые данные
+        fetchSheetForMonth(sheetId, viewMonth, viewYear);
+      } catch (err) {
+        console.error('[App] Ошибка загрузки данных сотрудников:', err);
+      }
+    };
 
-  const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string) => {
+    loadEmployeeData();
+  }, [employeeDataScriptUrl, sheetId, viewMonth, viewYear, fetchSheetForMonth]);
+
+
+  const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string, employeeScriptUrl?: string) => {
     const cleanId = id.includes('spreadsheets/d/')
       ? id.split('spreadsheets/d/')[1].split('/')[0]
       : id.trim();
@@ -309,6 +323,11 @@ function AppInner() {
       setAppsScriptUrl(scriptUrl);
       if (scriptUrl) localStorage.setItem(STORAGE_KEY_SCRIPT, scriptUrl);
       else           localStorage.removeItem(STORAGE_KEY_SCRIPT);
+    }
+    if (employeeScriptUrl !== undefined) {
+      setEmployeeDataScriptUrl(employeeScriptUrl);
+      if (employeeScriptUrl) localStorage.setItem(STORAGE_KEY_EMPLOYEE_SCRIPT, employeeScriptUrl);
+      else                   localStorage.removeItem(STORAGE_KEY_EMPLOYEE_SCRIPT);
     }
     // Сбрасываем кэш и карту листов
     dataCache.clear();
@@ -427,6 +446,7 @@ function AppInner() {
             onMonthChange={handleMonthChange}
             sheetsApiKey={sheetsApiKey}
             appsScriptUrl={appsScriptUrl}
+            employeeDataScriptUrl={employeeDataScriptUrl}
             onEmployeeUpdate={handleUpdateEmployee}
           />
         )}

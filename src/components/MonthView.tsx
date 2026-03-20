@@ -147,7 +147,9 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
     const entry = data.shifts.find(s => s.employeeId === emp.id && s.date === dateStr);
     const shift: ShiftType = entry?.shift ?? 'off';
     const role = entry?.role || emp.role;
-    if (shift === 'off') return;
+    
+    // Пропускаем только если нет ни смены, ни часов (multipleShifts)
+    if (shift === 'off' && !entry?.hours && !entry?.multipleShifts) return;
     const dept = getDepartment(role) ?? emp.department ?? null;
     // Получаем админские часы
     const custom = getShiftEdit(emp.id, dateStr);
@@ -156,7 +158,23 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, date, data, onClo
     if (shift === 'vacation' || shift === 'sick') {
       absent.push({ name: emp.name, role, color: emp.color, shift });
     } else {
-      working.push({ name: emp.name, role, color: emp.color, shift, dept, customStart, customEnd });
+      // Если есть multipleShifts, добавляем сотрудника для каждого отдела
+      if (entry?.multipleShifts && entry.multipleShifts.length > 1) {
+        // Для каждого отдела в multipleShifts добавляем отдельную запись
+        entry.multipleShifts.forEach(ms => {
+          working.push({ 
+            name: emp.name, 
+            role, 
+            color: emp.color, 
+            shift, 
+            dept: ms.dept as Department, 
+            customStart, 
+            customEnd 
+          });
+        });
+      } else {
+        working.push({ name: emp.name, role, color: emp.color, shift, dept, customStart, customEnd });
+      }
     }
   });
 
@@ -486,7 +504,7 @@ export const MonthView: React.FC<MonthViewProps> = ({ data, month, year, fakeDat
                       </span>
                     ))}
                     {mySegments.length > 3 && (
-                      <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                      <span className={`text-[8px] font-semibold px-1.5 py-0.5 rounded-full ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'}`}>
                         +{mySegments.length - 3}
                       </span>
                     )}

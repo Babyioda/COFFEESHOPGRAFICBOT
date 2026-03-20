@@ -9,9 +9,9 @@ import {
   getTgUser, getTgUserId, getTgFullName, initTelegramApp,
   saveTgLink, getEmpIdByTgId, syncTgLink, clearTgLinksForEmp,
 } from '../utils/telegram';
-import { saveEmpNote, getEmpNote, saveEmpPrefs, getEmpPrefs, EmpPrefs, saveLinkedEmpId, getLinkedEmpId, getPrefsSyncError } from '../utils/adminEdits';
+import { saveEmpNote, getEmpNote, saveLinkedEmpId, getLinkedEmpId } from '../utils/adminEdits';
 import { fetchEmployeeNotes, testFullFirebase, testFirestoreIndexError } from '../utils/firebase';
-import { watchEmpPrefs, watchEmpNotes } from '../utils/firebase';
+import { watchEmpNotes } from '../utils/firebase';
 
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
@@ -49,7 +49,8 @@ interface SettingsSectionProps {
   sheetId: string; sheetGid: string;
   sheetsApiKey?: string;
   appsScriptUrl?: string;
-  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string) => void;
+  employeeDataScriptUrl?: string;
+  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string, employeeScriptUrl?: string) => void;
   lastSync: string | null;
   isLoading: boolean; onRefresh: () => void;
   error: string | null;
@@ -63,7 +64,7 @@ interface SettingsSectionProps {
   onEmployeeUpdate?: (emp: Employee) => void;
 }
 const SettingsSection: React.FC<SettingsSectionProps> = ({
-  sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', onSave, lastSync, isLoading, onRefresh, error,
+  sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', employeeDataScriptUrl = '', onSave, lastSync, isLoading, onRefresh, error,
   fakeDate, onFakeDateChange, onOpenAdminPanel, isAdmin = false, linkedEmp, tgUser, tgId,
   onEmployeeUpdate,
 }) => {
@@ -74,14 +75,10 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   const [localGid, setLocalGid]       = useState(sheetGid);
   const [localApiKey, setLocalApiKey] = useState(sheetsApiKey);
   const [localScript, setLocalScript] = useState(appsScriptUrl);
+  const [localEmployeeScript, setLocalEmployeeScript] = useState(employeeDataScriptUrl);
   const [fakeDateEnabled, setFakeDateEnabled] = useState(!!fakeDate);
   const [fakeDateVal, setFakeDateVal] = useState<string>(fakeDate ? toInputValue(fakeDate) : toInputValue(new Date()));
   const [copyingDebug, setCopyingDebug] = useState(false);
-  // showSyncError monitoring removed
-
-  // preferences for linked employee
-  const [birthdayInput, setBirthdayInput] = useState(''); // yyyy-mm-dd
-  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Очистка localStorage
   const handleClearLocalStorage = () => {
@@ -116,32 +113,13 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     });
   };
 
-  // Реалтайм-подписка на настройки сотрудника (день рождения, Telegram, username), правила и заметки
+  // Реалтайм-подписка на примечания к сотрудникам
   useEffect(() => {
     if (!linkedEmp) return;
-    setPrefsLoaded(false);
     console.log('[ProfileView] Setting up Firebase listeners for:', linkedEmp.id);
     const unsubscribers: (() => void)[] = [];
     
     try {
-      // Подписка на все prefs
-      const unsubPrefs = watchEmpPrefs((allPrefs) => {
-        try {
-          const p = allPrefs.find(p => p.empId === linkedEmp.id) as Partial<EmpPrefs> || {};
-          console.log('[ProfileView] Firebase prefs updated:', { empId: linkedEmp.id, prefs: p });
-          if (p.birthday) {
-            setBirthdayInput(`2000-${p.birthday}`);
-          } else {
-            setBirthdayInput('');
-          }
-          setPrefsLoaded(true);
-        } catch (err) {
-          console.error('[ProfileView] Error processing prefs:', err);
-          setPrefsLoaded(true);
-        }
-      });
-      unsubscribers.push(unsubPrefs);
-
       // Подписка на employee notes (заметки)
       const unsubNotes = watchEmpNotes((allNotes) => {
         try {
@@ -157,7 +135,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
       unsubscribers.push(unsubNotes);
     } catch (err) {
       console.error('[ProfileView] Failed to set up Firebase listeners:', err);
-      setPrefsLoaded(true);
     }
 
     return () => {
@@ -177,7 +154,7 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     const id = localId.includes('spreadsheets/d/')
       ? localId.split('spreadsheets/d/')[1].split('/')[0]
       : localId.trim();
-    onSave(id, localGid, localApiKey.trim() || undefined, localScript.trim() || undefined);
+    onSave(id, localGid, localApiKey.trim() || undefined, localScript.trim() || undefined, localEmployeeScript.trim() || undefined);
   };
 
   const handleFakeDateToggle = (v: boolean) => {
@@ -286,6 +263,23 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
                 className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-violet-400 ${inp}`}
               />
             </div>
+            {/* Employee Data Script URL */}
+            <div className={`p-3 rounded-xl border ${isDark ? 'bg-slate-700/50 border-slate-600' : 'bg-green-50 border-green-200'}`}>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-sm">👥</span>
+                <span className={`text-xs font-bold ${isDark ? 'text-green-400' : 'text-green-700'}`}>Employee Data Script URL</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${isDark ? 'bg-slate-600 text-slate-400' : 'bg-green-100 text-green-600'}`}>необязательно</span>
+              </div>
+              <p className={`text-[11px] mb-2 ${isDark ? 'text-slate-400' : 'text-green-600'}`}>
+                Скрипт для загрузки данных сотрудников (день рождения, Telegram).
+              </p>
+              <input
+                type="text" value={localEmployeeScript}
+                onChange={e => setLocalEmployeeScript(e.target.value)}
+                placeholder="https://script.google.com/macros/s/.../exec"
+                className={`w-full text-xs border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-400 ${inp}`}
+              />
+            </div>
             <button
               onClick={handleSave}
               className="w-full py-3 rounded-xl bg-indigo-500 text-white font-semibold text-sm active:scale-95 transition-all hover:bg-indigo-600"
@@ -342,80 +336,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           >
             👥 Панель сотрудников →
           </button>
-        </div>
-      )}
-
-      {/* Личные пользовательские настройки */}
-      {linkedEmp && prefsLoaded && (
-        <div className={`rounded-2xl p-4 border shadow-sm ${card}`}>  
-          <div className="flex items-center justify-between mb-3">
-            <h3 className={`font-bold text-sm ${lbl}`}>⚙️ Личные настройки</h3>
-            <div className="text-[11px] font-semibold">
-              {getPrefsSyncError().error ? (
-                <span className="text-red-400">❌ Ошибка синхронизации</span>
-              ) : (
-                <span className="text-emerald-400">✅ Синхронизировано</span>
-              )}
-            </div>
-          </div>
-
-          {isAdmin ? (
-            <div className="space-y-3">
-              <div>
-                <label className={`text-xs font-semibold mb-1 block ${sub}`}>День рождения</label>
-                <input
-                  type="date"
-                  value={birthdayInput}
-                  onChange={e => setBirthdayInput(e.target.value)}
-                  className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
-                />
-                <p className="text-[10px] text-gray-500">Год игнорируется</p>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!linkedEmp) return;
-                  try {
-                    const mmdd = birthdayInput ? birthdayInput.slice(5) : '';
-                    
-                    console.log('[ProfileView] Saving employee prefs...', { 
-                      empId: linkedEmp.id, 
-                      birthday: mmdd,
-                    });
-                    
-                    // Save to both localStorage and Firebase
-                    saveEmpPrefs({ 
-                      empId: linkedEmp.id, 
-                      birthday: mmdd,
-                    });
-                    
-                    // Update object for immediate effect
-                    linkedEmp.birthday = mmdd;
-                    if (updateEmployee) {
-                      updateEmployee({...linkedEmp});
-                    }
-                    
-                    console.log('[ProfileView] Employee prefs saved successfully');
-                    alert('✅ Настройки сохранены');
-                  } catch (err) {
-                    console.error('[ProfileView] Error saving prefs:', err);
-                    alert('❌ Ошибка при сохранении: ' + (err instanceof Error ? err.message : 'Unknown error'));
-                    // State remains intact - user can retry
-                  }
-                }}
-                className="w-full py-2 rounded-xl bg-indigo-500 text-white text-sm active:scale-95 transition-all"
-              >Сохранить</button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div>
-                <p className={`text-xs font-semibold mb-1 ${sub}`}>День рождения</p>
-                <p className={`text-sm ${isDark ? 'text-slate-100' : 'text-gray-900'}`}>
-                  {linkedEmp.birthday ? linkedEmp.birthday.split('-').reverse().join('.') : 'Не указано'}
-                </p>
-                <p className="text-[10px] text-gray-500">Изменение дня рождения доступно только администратору</p>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -534,11 +454,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
   const [noteText, setNoteText] = useState('');
 
-  // admin prefs for employee
-  const [adminShowTelegram, setAdminShowTelegram] = useState(false);
-  const [adminTelegramUsername, setAdminTelegramUsername] = useState('');
-  const [adminBirthdayInput, setAdminBirthdayInput] = useState('');
-
   useEffect(() => {
     const handler = (e: any) => {
       const empId = e?.detail?.empId;
@@ -547,11 +462,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
       if (emp) {
         setEditingEmp(emp);
         setNoteText(getEmpNote(emp.id));
-        // load prefs
-        const p = getEmpPrefs(emp.id) || {} as any;
-        setAdminShowTelegram(!!p.showTelegram);
-        setAdminTelegramUsername(p.tgUsername || '');
-        setAdminBirthdayInput(p.birthday ? `2000-${p.birthday}` : '');
       }
     };
     window.addEventListener('open-emp-editor', handler as EventListener);
@@ -741,64 +651,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                   className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100 placeholder-slate-500' : 'bg-gray-50 border-gray-200 text-gray-800 placeholder-gray-400'}`}
                 />
               </>
-              {/* admin prefs always visible */}
-              {editingEmp && (
-                <div className="mt-4 space-y-3">
-                  <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>⚙️ Дополнительно</p>
-                  <div>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={adminShowTelegram}
-                        onChange={e => {
-                          const checked = e.target.checked;
-                          setAdminShowTelegram(checked);
-                          if (editingEmp) {
-                            const updated = { ...editingEmp, showTelegram: checked };
-                            saveEmpPrefs({ empId: editingEmp.id, showTelegram: checked });
-                            setEditingEmp(updated);
-                            onEmployeeUpdate?.(updated);
-                          }
-                        }}
-                      />
-                      Показывать Telegram
-                    </label>
-                  </div>
-                  <div>
-                    <label className={`text-xs font-semibold mb-1 block ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>@Telegram username</label>
-                    <input
-                      type="text"
-                      value={adminTelegramUsername}
-                      onChange={e => {
-                        const username = e.target.value.replace(/^@/, '').trim();
-                        setAdminTelegramUsername(username);
-                        if (editingEmp) {
-                          saveEmpPrefs({ empId: editingEmp.id, tgUsername: username || undefined });
-                        }
-                      }}
-                      placeholder="example"
-                      className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
-                    />
-                    <p className="text-[10px] text-gray-500 mt-1">Без символа @, ссылка будет t.me/{adminTelegramUsername}</p>
-                  </div>
-                  <div>
-                    <input
-                      type="date"
-                      value={adminBirthdayInput}
-                      onChange={e => {
-                        const value = e.target.value;
-                        setAdminBirthdayInput(value);
-                        if (editingEmp) {
-                          const mmdd = value ? value.slice(5) : undefined;
-                          saveEmpPrefs({ empId: editingEmp.id, birthday: mmdd });
-                        }
-                      }}
-                      className={`w-full text-sm border rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 ${isDark ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-gray-50 border-gray-200 text-gray-800'}`}
-                    />
-                    <p className="text-[10px] text-gray-500">Год игнорируется</p>
-                  </div>
-                </div>
-              )}
             </div>
             <div className={`px-5 pb-6 flex gap-2 border-t ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
               <button
@@ -811,19 +663,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ data, onClose, lastSync, isLoad
                 onClick={() => {
                   if (editingEmp) {
                     saveEmpNote(editingEmp.id, noteText);
-                    // save admin prefs as well
-                    const mmdd = adminBirthdayInput ? adminBirthdayInput.slice(5) : '';
-                    saveEmpPrefs({ 
-                      empId: editingEmp.id, 
-                      showTelegram: adminShowTelegram, 
-                      tgUsername: adminTelegramUsername || undefined,
-                      birthday: mmdd 
-                    });
-                    const updated = { ...editingEmp, showTelegram: adminShowTelegram, birthday: mmdd };
-                    setEditingEmp(updated);
-                    onEmployeeUpdate?.(updated);
+                    setEditingEmp(null);
                   }
-                  setEditingEmp(null);
                 }}
                 className="flex-grow flex-2 py-3 rounded-2xl text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition-all active:scale-95"
               >
@@ -1013,7 +854,8 @@ interface ProfileViewProps {
   sheetId: string; sheetGid: string;
   sheetsApiKey?: string;
   appsScriptUrl?: string;
-  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string) => void;
+  employeeDataScriptUrl?: string;
+  onSave: (id: string, gid: string, apiKey?: string, scriptUrl?: string, employeeScriptUrl?: string) => void;
   lastSync: string | null;
   isLoading: boolean;
   onRefresh: (month?: number, year?: number) => void;
@@ -1025,7 +867,7 @@ interface ProfileViewProps {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
-  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '',
+  data, month, year, fakeDate, sheetId, sheetGid, sheetsApiKey = '', appsScriptUrl = '', employeeDataScriptUrl = '',
   onSave, lastSync, isLoading, onRefresh, error,
   onFakeDateChange, onLinkedEmpChange, onMonthChange: _onMonthChange,
   onEmployeeUpdate,
@@ -1072,15 +914,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const displayName = tgUser ? getTgFullName(tgUser) : name;
     setTgName(displayName);
     localStorage.setItem(STORAGE_TG_NAME, displayName);
-    
-    // Автоматически сохранить Telegram username если он есть в Telegram профиле
-    if (tgUser?.username) {
-      console.log('[ProfileView] Auto-saving Telegram username:', tgUser.username);
-      saveEmpPrefs({
-        empId: id,
-        customUsername: tgUser.username, // Save from Telegram profile
-      });
-    }
     
     setIsLinking(false);
     setSearchQuery('');
@@ -1193,6 +1026,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 sheetId={sheetId} sheetGid={sheetGid}
                 sheetsApiKey={sheetsApiKey}
                 appsScriptUrl={appsScriptUrl}
+                employeeDataScriptUrl={employeeDataScriptUrl}
                 onSave={onSave} lastSync={lastSync}
                 isLoading={isLoading} onRefresh={onRefresh}
                 error={error} fakeDate={fakeDate}
@@ -1281,6 +1115,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           sheetId={sheetId} sheetGid={sheetGid}
           sheetsApiKey={sheetsApiKey}
           appsScriptUrl={appsScriptUrl}
+          employeeDataScriptUrl={employeeDataScriptUrl}
           onSave={onSave} lastSync={lastSync}
           isLoading={isLoading} onRefresh={onRefresh}
           error={error} fakeDate={fakeDate}

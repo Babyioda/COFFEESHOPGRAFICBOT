@@ -601,9 +601,9 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
                   {/* Дополнительная секция для именинников без смен */}
                   {group.filter(w => w.birthday && w.shift === 'off' && !w.hours).length > 0 && (
                     <div key="birthdays">
-                      <div className={`px-4 py-1.5 flex items-center gap-2 bg-pink-100`}> 
+                      <div className={`px-4 py-1.5 flex items-center gap-2 ${isDark ? 'bg-pink-900/40' : 'bg-pink-100'}`}> 
                         <span className="text-sm">🎂</span>
-                        <span className="text-xs font-semibold">Именинник</span>
+                        <span className={`text-xs font-semibold ${isDark ? 'text-pink-300' : 'text-gray-800'}`}>Именинник</span>
                       </div>
                       <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-gray-50'}`}>
                         {group.filter(w => w.birthday && w.shift === 'off' && !w.hours).map((w, i) => {

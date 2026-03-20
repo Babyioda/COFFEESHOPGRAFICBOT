@@ -499,6 +499,44 @@ export async function findSheetGidByMonth(sheetId: string, month: number, year: 
   return found ? found.gid : null;
 }
 
+// ==================== EMPLOYEE DATA (Birthday, Telegram) ====================
+
+export interface EmployeeData {
+  name: string;
+  tgUsername: string;
+  birthday: string; // мм-дд
+}
+
+/**
+ * Загружает данные сотрудников (Birthday, Telegram) из отдельного Apps Script
+ * @param scriptUrl - URL Apps Script, который возвращает список сотрудников
+ * @returns Массив данных сотрудников или пустой массив в случае ошибки
+ */
+export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData[]> {
+  if (!scriptUrl) {
+    console.warn('[useGoogleSheets] Employee data script URL не задан');
+    return [];
+  }
+
+  try {
+    console.log('[useGoogleSheets] Загружаем данные сотрудников из:', scriptUrl);
+    const res = await fetch(scriptUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+    const json = await res.json();
+    if (!json.employees || !Array.isArray(json.employees)) {
+      console.warn('[useGoogleSheets] Некорректный ответ от скрипта:', json);
+      return [];
+    }
+
+    console.log('[useGoogleSheets] Загружено сотрудников:', json.employees.length);
+    return json.employees;
+  } catch (err) {
+    console.error('[useGoogleSheets] Ошибка загрузки данных сотрудников:', err);
+    return [];
+  }
+}
+
 // ==================== ХУК ====================
 interface UseGoogleSheetsConfig {
   sheetId: string;

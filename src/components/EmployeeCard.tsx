@@ -3,7 +3,7 @@ import {
   ScheduleData, ShiftType, SHIFT_CONFIG,
   DEPARTMENT_CONFIG, getDepartment, Employee,
 } from '../types/schedule';
-import { getEmpPrefs, getEmpNote, saveEmpNote, getShiftEdit } from '../utils/adminEdits';
+import { getEmpNote, saveEmpNote, getShiftEdit } from '../utils/adminEdits';
 import { useTheme } from '../context/ThemeContext';
 
 
@@ -81,8 +81,8 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
     ? ({ power: 'linear-gradient(135deg,#b45309,#d97706)', bar: 'linear-gradient(135deg,#7c3aed,#a855f7)', hall: 'linear-gradient(135deg,#0369a1,#0ea5e9)', kitchen: 'linear-gradient(135deg,#15803d,#22c55e)' })[headerDept]
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
 
-  const tgUsername = getEmpPrefs(emp.id)?.tgUsername || '';
-  const showTelegramPref = emp.showTelegram ?? getEmpPrefs(emp.id)?.showTelegram ?? false;
+  const tgUsername = emp.tgUsername || '';
+  const showTelegramPref = emp.showTelegram ?? false;
   const tgError = showTelegramPref && !tgUsername ? 'Telegram не указан администратором' : '';
 
   const CAL_CELL: Record<ShiftType, string> = isDark ? {
@@ -218,7 +218,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
               </button>
 
               {showTelegramPref ? (
-                tgUsername ? (
+                tgUsername && tgUsername !== 'no' ? (
                   <a
                     href={`https://t.me/${tgUsername}`}
                     target="_blank"

@@ -22,7 +22,6 @@ export async function testFullFirebase(): Promise<TestResult[]> {
     shifts: { employeeId: 'test-emp-456', start: new Date(), visible: true },
 
     emp_notes: { employeeId: 'test-emp-456', text: 'Test emp note', authorId: 'test-user' },
-    emp_prefs: { employeeId: 'test-emp-456', showTelegram: true, birthday: '01-01', customUsername: 'testuser' },
     shift_edits: { shiftId: 'test-shift-123', editorId: 'test-user', changes: { field: 'value' } },
     user_links: { uid: 'test-uid', empId: 'test-emp-456' },
   };
@@ -697,51 +696,6 @@ export async function fetchEmpNotes(): Promise<EmpNoteDoc[]> {
 
 // Employee Rules removed - use only Employee Preferences instead
 
-// ======== Employee Preferences (Telegram visibility + Birthday + Username) ========
-export interface EmpPrefsDoc {
-  empId: string;
-  showTelegram?: boolean;
-  tgUsername?: string;    // Telegram username set by admin
-  birthday?: string; // MM-DD
-  customUsername?: string; // Manually entered @username
-  updatedAt?: any;
-}
-
-export async function setEmpPrefs(prefs: EmpPrefsDoc): Promise<void> {
-  try {
-    const docRef = doc(db, 'emp_prefs', prefs.empId);
-    await setDoc(docRef, {
-      ...prefs,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    console.log('[Firebase] Employee prefs saved:', prefs.empId);
-  } catch (err) {
-    console.error('[Firebase] Failed to save employee prefs:', err);
-    throw err;
-  }
-}
-
-export async function fetchEmpPrefs(empId: string): Promise<EmpPrefsDoc | null> {
-  try {
-    const snap = await getDocs(query(collection(db, 'emp_prefs'), where('empId', '==', empId)));
-    if (snap.empty) return null;
-    return snap.docs[0].data() as EmpPrefsDoc;
-  } catch (err) {
-    console.error('[Firebase] Failed to fetch employee prefs:', err);
-    return null;
-  }
-}
-
-export async function fetchAllEmpPrefs(): Promise<EmpPrefsDoc[]> {
-  try {
-    const snap = await getDocs(collection(db, 'emp_prefs'));
-    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
-  } catch (err) {
-    console.error('[Firebase] Failed to fetch all employee prefs:', err);
-    return [];
-  }
-}
-
 // ======== User-Employee Link (current user → employee) ========
 export interface UserLinkDoc {
   uid: string;
@@ -795,36 +749,13 @@ export function watchEmpNotes(cb: (items: EmpNoteDoc[]) => void) {
     }, (err: any) => {
       console.error('[Firebase] Watch error for emp_notes:', err.code, err.message);
       if (err.code === 'permission-denied') {
-        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_prefs collection needs read access.');
+        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_notes collection needs read access.');
       }
       // Still call callback with empty array to avoid breaking UI
       cb([]);
     });
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for emp_notes:', err);
-    return () => {};
-  }
-}
-
-
-
-// Реалтайм слушатель для дней рождения и Telegram (emp_prefs)
-export function watchEmpPrefs(cb: (items: EmpPrefsDoc[]) => void) {
-  try {
-    return onSnapshot(collection(db, 'emp_prefs'), (snap: any) => {
-      const prefs = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
-      console.log('[Firebase] Watch emp_prefs updated:', prefs.length, 'items');
-      cb(prefs);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for emp_prefs:', err.code, err.message);
-      if (err.code === 'permission-denied') {
-        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_prefs collection needs read access.');
-      }
-      // Still call callback with empty array to avoid breaking UI
-      cb([]);
-    });
-  } catch (err) {
-    console.error('[Firebase] Failed to set up watch for emp_prefs:', err);
     return () => {};
   }
 }
