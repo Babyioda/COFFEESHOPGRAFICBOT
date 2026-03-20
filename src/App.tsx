@@ -313,24 +313,21 @@ function AppInner() {
         setEmployeeDataMap(map);
         console.log('[App] ✅ Loaded data map:', map.size, 'employees');
         console.log('[App] 🔍 Map contents (sample):', Array.from(map.entries()).slice(0, 5));
-        
-        // Перезагружаем текущий месяц, чтобы применить новые данные
-        // Используем текущие значения напрямую без добавления в зависимости
-        const current_month = viewMonth;
-        const current_year = viewYear;
-        const current_id = sheetId;
-        if (current_id && current_month && current_year) {
-          setTimeout(() => {
-            fetchSheetForMonth(current_id, current_month, current_year);
-          }, 0);
-        }
       } catch (err) {
         console.error('[App] Ошибка загрузки данных сотрудников:', err);
       }
     };
 
     loadEmployeeData();
-  }, [employeeDataScriptUrl]); // ← Только URL, не добавляем fetchSheetForMonth!
+  }, [employeeDataScriptUrl]);
+
+  // ── Перезагружаем лист когда employeeDataMap обновится ──
+  useEffect(() => {
+    if (employeeDataMap.size > 0 && sheetId && viewMonth && viewYear) {
+      console.log('[App] 📂 employeeDataMap updated, reloading sheet with birthday data...');
+      fetchSheetForMonth(sheetId, viewMonth, viewYear);
+    }
+  }, [employeeDataMap]);
 
 
   const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string, employeeScriptUrl?: string) => {
