@@ -314,15 +314,15 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
         } else if (hours && hours > 0) {
           // Если уже был найден другой числовой часовойчёт, нужно сложить по департаментам.
           const existingDept = getDepartment(existing.role ?? emp.role) ?? deptForRow;
-          const existingShifts: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number }> = [];
+          const existingShifts: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number; role?: string }> = [];
 
           if (existing.multipleShifts && existing.multipleShifts.length > 0) {
             existingShifts.push(...existing.multipleShifts);
           } else if (existing.hours && existing.hours > 0) {
-            existingShifts.push({ dept: existingDept, hours: existing.hours });
+            existingShifts.push({ dept: existingDept, hours: existing.hours, role: existing.role });
           }
 
-          existingShifts.push({ dept: deptForRow, hours });
+          existingShifts.push({ dept: deptForRow, hours, role: roleCell });
           const total = existingShifts.reduce((sum, s) => sum + s.hours, 0);
 
           shifts[existingIdx] = {
@@ -341,7 +341,7 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
         else if (multipleShifts && multipleShifts.length > 0) newEntry.multipleShifts = multipleShifts;
         if (hours && hours > 0) {
           newEntry.hours = hours;
-          newEntry.multipleShifts = [{ dept: deptForRow, hours }];
+          newEntry.multipleShifts = [{ dept: deptForRow, hours, role: roleCell }];
         }
         shifts.push(newEntry as any);
       }

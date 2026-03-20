@@ -144,7 +144,10 @@ function AppInner() {
 
   // ── Загружаем CSV для конкретного месяца/года ──
   const fetchSheetForMonth = useCallback(async (id: string, month: number, year: number, gidOverride?: string) => {
-    if (!id) return;
+    if (!id || !month || !year || month < 1 || month > 12) {
+      console.error('[App] Invalid parameters:', { id, month, year });
+      return;
+    }
 
     const cacheKey = `${id}_${month}_${year}`;
     const gid = gidOverride ?? sheetMap.get(`${month}_${year}`) ?? sheetGid;
@@ -162,6 +165,9 @@ function AppInner() {
         console.log('[App] Using Apps Script:', scriptUrl);
         // Строим название листа для поиска
         const MONTH_NAMES_RU = ['','январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+        if (!month || month < 1 || month > 12) {
+          throw new Error(`Неверный месяц: ${month}`);
+        }
         const sheetName = `${MONTH_NAMES_RU[month].toUpperCase()} ${year}`;
         const url = `${scriptUrl}?sheet=${encodeURIComponent(sheetName)}`;
         console.log('[App] Fetching from Apps Script:', url);
@@ -296,14 +302,22 @@ function AppInner() {
         console.log('[App] Загружены данные:', map.size, 'сотрудников');
         
         // Перезагружаем текущий месяц, чтобы применить новые данные
-        fetchSheetForMonth(sheetId, viewMonth, viewYear);
+        // Используем текущие значения напрямую без добавления в зависимости
+        const current_month = viewMonth;
+        const current_year = viewYear;
+        const current_id = sheetId;
+        if (current_id && current_month && current_year) {
+          setTimeout(() => {
+            fetchSheetForMonth(current_id, current_month, current_year);
+          }, 0);
+        }
       } catch (err) {
         console.error('[App] Ошибка загрузки данных сотрудников:', err);
       }
     };
 
     loadEmployeeData();
-  }, [employeeDataScriptUrl, sheetId, viewMonth, viewYear, fetchSheetForMonth]);
+  }, [employeeDataScriptUrl]); // ← Только URL, не добавляем fetchSheetForMonth!
 
 
   const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string, employeeScriptUrl?: string) => {

@@ -105,7 +105,8 @@ function getShiftSegments(shift: ShiftEntry, emp: Employee): Array<{ role: strin
   if (shift.multipleShifts && shift.multipleShifts.length > 0) {
     return shift.multipleShifts
       .map(ms => {
-        const roleForDept = emp.roles?.find(r => getDepartment(r) === ms.dept) || baseRole;
+        // Сначала используем роль из multipleShifts, потом ищем по отделу, потом базовую роль
+        const roleForDept = ms.role || emp.roles?.find(r => getDepartment(r) === ms.dept) || baseRole;
         return ms.hours > 0 ? { role: roleForDept, hours: ms.hours } : null;
       })
       .filter(Boolean) as Array<{ role: string; hours: number }>;

@@ -371,14 +371,14 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
   const working: {
     emp: Employee; name: string; role: string; color: string;
     shift: ShiftType; dept: Department; isMe: boolean; hours?: number;
-    multipleShifts?: Array<{ dept: Department; hours: number }>;
+    multipleShifts?: Array<{ dept: Department; hours: number; role?: string }>;
     startTime?: string; endTime?: string;
     birthday?: boolean;
   }[] = [];
   const absent: {
     emp: Employee; name: string; role: string; color: string;
     shift: ShiftType; isMe: boolean; hours?: number;
-    multipleShifts?: Array<{ dept: Department; hours: number }>;
+    multipleShifts?: Array<{ dept: Department; hours: number; role?: string }>;
     birthday?: boolean;
   }[] = [];
 
@@ -417,7 +417,9 @@ const DayModal: React.FC<DayModalProps> = ({ day, month, year, data, linkedEmpId
       // Если есть несколько смен по часам, добавляем отдельную запись для каждой
       for (const ms of multipleShifts) {
         const deptCfg = DEPARTMENT_CONFIG[ms.dept];
-        const roleForShift = emp.roles?.find(r => getDepartment(r) === ms.dept) || role;
+        // Сначала используем роль из multipleShifts (сохранена при парсировании)
+        // Потом ищем роль по отделу, потом используем базовую роль
+        const roleForShift = ms.role || emp.roles?.find(r => getDepartment(r) === ms.dept) || role;
         working.push({
           emp,
           name: emp.name,
@@ -1183,10 +1185,17 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                               };
                             });
                           } else if (c.multipleShifts && c.multipleShifts.length > 0) {
-                            items = c.multipleShifts.map(ms => ({
-                              text: `${deptIcon}${ms.hours}ч`,
-                              color: c.color,
-                            }));
+                            items = c.multipleShifts.map(ms => {
+                              const deptCfg = DEPARTMENT_CONFIG[ms.dept];
+                              const deptIcon = deptCfg?.icon ? `${deptCfg.icon} ` : '';
+                              const text = ms.role 
+                                ? `${deptIcon}${ms.hours}ч ${ms.role.toLowerCase()}`
+                                : `${deptIcon}${ms.hours}ч`;
+                              return {
+                                text,
+                                color: deptCfg?.color || c.color,
+                              };
+                            });
                           } else if (c.hours) {
                             items = [{ text: `${deptIcon}${c.hours}ч`, color: c.color }];
                           } else if (timeStart && timeEnd && (c.customStart || c.customEnd)) {

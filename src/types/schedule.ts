@@ -187,6 +187,7 @@ export interface Employee {
 export interface MultipleShift {
   dept: Department;
   hours: number;
+  role?: string;  // роль для этого отдела (например, "Повар" для kitchen)
 }
 
 export interface ShiftWithTime {
