@@ -205,13 +205,17 @@ function AppInner() {
 
       // Применяем данные сотрудников (Birthday, Telegram) по имени
       const employeesWithData = parsed.employees.map(emp => {
-        const empData = employeeDataMap.get(emp.name.toLowerCase());
+        const empNameLower = emp.name.toLowerCase();
+        const empData = employeeDataMap.get(empNameLower);
+        console.log(`[App] 🔍 Searching for "${emp.name}" (${empNameLower}) in map... Found:`, !!empData);
         if (empData) {
           emp.birthday = empData.birthday || undefined;
           emp.tgUsername = empData.tgUsername || undefined;
           if (empData.birthday) {
             console.log(`[App] 🎂 Applied birthday to ${emp.name}: ${empData.birthday}`);
           }
+        } else {
+          console.log(`[App] ❌ No data found for "${emp.name}" in employeeDataMap (size: ${employeeDataMap.size})`);
         }
         return emp;
       });
@@ -296,14 +300,19 @@ function AppInner() {
     const loadEmployeeData = async () => {
       try {
         const data = await fetchEmployeeData(employeeDataScriptUrl);
+        console.log('[App] 🔍 Raw employee data from script:', data);
         const map = new Map<string, EmployeeData>();
         
         for (const emp of data) {
           map.set(emp.name.toLowerCase(), emp);
+          if (emp.birthday) {
+            console.log(`[App] 📌 Added to map: "${emp.name.toLowerCase()}" => birthday: ${emp.birthday}`);
+          }
         }
         
         setEmployeeDataMap(map);
-        console.log('[App] Загружены данные:', map.size, 'сотрудников');
+        console.log('[App] ✅ Loaded data map:', map.size, 'employees');
+        console.log('[App] 🔍 Map contents (sample):', Array.from(map.entries()).slice(0, 5));
         
         // Перезагружаем текущий месяц, чтобы применить новые данные
         // Используем текущие значения напрямую без добавления в зависимости
