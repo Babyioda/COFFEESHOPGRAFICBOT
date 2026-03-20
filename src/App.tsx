@@ -3,9 +3,9 @@ import { ShiftsView } from './components/ShiftsView';
 import { ProfileView } from './components/ProfileView';
 import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey, fetchEmployeeData, EmployeeData } from './hooks/useGoogleSheets';
 import { ScheduleData, Employee } from './types/schedule';
+import { getTgUserId } from './utils/telegram';
 
 const ADMIN_TG_IDS = [783948887, 6147055724];
-import { useDemoData, parseGoogleSheetsCSV, fetchSheetList, fetchSheetListWithApiKey, fetchEmployeeData, EmployeeData } from './hooks/useGoogleSheets';
 import { getEmpPrefs, getLinkedEmpId, saveLinkedEmpId, cacheEmpPrefs } from './utils/adminEdits';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
