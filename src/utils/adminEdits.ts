@@ -87,9 +87,13 @@ export function saveShiftEdit(edit: ShiftEdit): void {
     });
   } else {
     // If note is empty, delete existing shift notes for this shift
-    deleteShiftNotes(`${edit.empId}-${edit.date}`).catch((err) => {
-      console.error('[AdminEdits] Failed to delete shift notes from Firebase:', err);
-    });
+    // Only delete if we have a valid key
+    const shiftKey = `${edit.empId}-${edit.date}`;
+    if (shiftKey && shiftKey.length > 0) {
+      deleteShiftNotes(shiftKey).catch((err) => {
+        console.warn('[AdminEdits] Info: shift notes not found or already deleted (this is OK):', err);
+      });
+    }
   }
 }
 
@@ -114,9 +118,12 @@ export function deleteShiftEdit(empId: string, date: string): void {
   });
 
   // Also delete associated shift notes
-  deleteShiftNotes(`${empId}-${date}`).catch((err) => {
-    console.error('[AdminEdits] Failed to delete shift notes from Firebase:', err);
-  });
+  const shiftKey = `${empId}-${date}`;
+  if (shiftKey && shiftKey.length > 0) {
+    deleteShiftNotes(shiftKey).catch((err) => {
+      console.warn('[AdminEdits] Info: shift notes not found when deleting (this is OK):', err);
+    });
+  }
 
   // Sync deletion to Apps Script as async task
   syncShiftDeleteToServer(empId, date).catch(err => {

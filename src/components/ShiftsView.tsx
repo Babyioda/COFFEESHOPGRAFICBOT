@@ -47,6 +47,9 @@ function getDeptColorByRole(role: string, fallback = '#6366f1'): string {
 
 const STORAGE_COLLEAGUE_COLORS = 'sf_colleague_colors';
 
+// Фиксированные цвета для коллег (красный, сиреневый, белый)
+const COLLEAGUE_COLORS = ['#ef4444', '#a855f7', '#ffffff'];
+
 function loadColleagueColors(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(STORAGE_COLLEAGUE_COLORS) || '{}'); } catch { return {}; }
 }
@@ -57,15 +60,11 @@ function saveColleagueColor(empId: string, color: string): void {
   try { localStorage.setItem(STORAGE_COLLEAGUE_COLORS, JSON.stringify(all)); } catch {}
 }
 
-function ensureColleagueColor(emp: Employee): string {
+function ensureColleagueColor(emp: Employee, index: number = 0): string {
   const all = loadColleagueColors();
   if (all[emp.id]) return all[emp.id];
-  // Use a deterministic color derived from the employee id, falling back to their own color or dept color.
-  const base = emp.color || getDeptColorByRole(emp.role, '#6366f1');
-  const hash = Array.from(emp.id).reduce((h, c) => (h * 31 + c.charCodeAt(0)) & 0xffff, 0);
-  const hue = hash % 360;
-  const generated = `hsl(${hue}, 62%, 55%)`;
-  const chosen = base || generated;
+  // Assign one of three fixed colors based on index
+  const chosen = COLLEAGUE_COLORS[Math.min(index, COLLEAGUE_COLORS.length - 1)];
   saveColleagueColor(emp.id, chosen);
   return chosen;
 }
@@ -990,7 +989,8 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
       // Ensure we assign a stable color for newly selected colleagues
       if (!prev.includes(id) && next.includes(id)) {
         const emp = data.employees.find(e => e.id === id);
-        if (emp) ensureColleagueColor(emp);
+        const index = next.indexOf(id);
+        if (emp) ensureColleagueColor(emp, index);
       }
       return next;
     });
@@ -1137,7 +1137,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               myShortTime = myTimes?.short;
             }
 
-            const colleagueShifts = colleagueIds.map(cId => {
+            const colleagueShifts = colleagueIds.map((cId, index) => {
               const cEmp   = data.employees.find(e => e.id === cId);
               if (!cEmp) return null;
               const cEntry = data.shifts.find(s => s.employeeId === cId && s.date === dateStr);
@@ -1145,7 +1145,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               const cHours = cEntry?.hours;
               const cMultipleShifts = cEntry?.multipleShifts;
               const cShiftsWithTimes = cEntry?.shiftsWithTimes;
-              const color  = ensureColleagueColor(cEmp);
+              const color  = ensureColleagueColor(cEmp, index);
               const cCustom = getShiftEditFromFirebase(cId, dateStr);
               const cRole = cEntry?.role || cEmp.role;
               const cDept = getDepartment(cRole);
@@ -1388,10 +1388,10 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               </div>
             );
           })}
-          {colleagueIds.map(cId => {
+          {colleagueIds.map((cId, index) => {
             const cEmp = data.employees.find(e => e.id === cId);
             if (!cEmp) return null;
-            const cColor = ensureColleagueColor(cEmp);
+            const cColor = ensureColleagueColor(cEmp, index);
             return (
               <div key={cId} className="flex items-center gap-1">
                 <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cColor }} />

@@ -521,12 +521,24 @@ export async function deleteEmployeeNotes(employeeId: string) {
 // Delete shift notes by shiftId (all documents) — used when removing shift edits
 export async function deleteShiftNotes(shiftId: string) {
   try {
+    // Guard against empty shiftId
+    if (!shiftId || shiftId.trim().length === 0) {
+      console.warn('[Firebase] deleteShiftNotes: Empty shiftId provided, skipping deletion');
+      return;
+    }
+    
     const q = query(collection(db, 'shift_notes'), where('shiftId', '==', shiftId));
     const snap = await getDocs(q);
+    
+    if (snap.size === 0) {
+      console.log(`[Firebase] No shift notes found for ${shiftId} (this is OK)`);
+      return;
+    }
+    
     await Promise.all(snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => deleteDoc(doc(db, 'shift_notes', d.id))));
     console.log(`[Firebase] Deleted ${snap.docs.length} shift notes for ${shiftId}`);
   } catch (err) {
-    console.error('[Firebase] Failed to delete shift notes:', err);
+    console.warn('[Firebase] Error deleting shift notes (non-critical):', err);
   }
 }
 
