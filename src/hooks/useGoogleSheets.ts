@@ -534,7 +534,7 @@ export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData
     }
 
     console.log('[useGoogleSheets] Загружено сотрудников:', json.employees.length);
-    console.log('[useGoogleSheets] 🎂 Sample employee data:', json.employees.slice(0, 3).map(e => ({ name: e.name, birthday: e.birthday })));
+    console.log('[useGoogleSheets] 🎂 Sample employee data:', json.employees.slice(0, 3).map(e => ({ name: e.name, birthday: e.birthday, tgUsername: e.tgUsername })));
     return json.employees;
   } catch (err) {
     console.error('[useGoogleSheets] Ошибка загрузки данных сотрудников:', err);

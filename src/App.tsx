@@ -334,6 +334,7 @@ function AppInner() {
         console.log('[App] ✅ Loaded data map:', map.size, 'employees');
         console.log('[App] 🔍 Map contents (sample):', Array.from(map.entries()).slice(0, 5));
         console.log('[App] 📋 All employee names in map:', Array.from(map.keys()).sort());
+        console.log('[App] 🎂 All birthdays in map:', Array.from(map.values()).filter(e => e.birthday).map(e => `${e.name}: ${e.birthday}`).join(', ') || 'none');
         setIsEmployeeDataLoaded(true);
       } catch (err) {
         console.error('[App] Ошибка загрузки данных сотрудников:', err);
