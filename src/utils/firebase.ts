@@ -523,7 +523,7 @@ export async function deleteShiftNotes(shiftId: string) {
   try {
     // Guard against empty shiftId
     if (!shiftId || shiftId.trim().length === 0) {
-      console.warn('[Firebase] deleteShiftNotes: Empty shiftId provided, skipping deletion');
+      console.log('[Firebase] deleteShiftNotes: Empty shiftId, skipping');
       return;
     }
     
@@ -531,14 +531,18 @@ export async function deleteShiftNotes(shiftId: string) {
     const snap = await getDocs(q);
     
     if (snap.size === 0) {
-      console.log(`[Firebase] No shift notes found for ${shiftId} (this is OK)`);
+      console.log(`[Firebase] No shift notes found for ${shiftId} (this is normal)`);
       return;
     }
     
-    await Promise.all(snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => deleteDoc(doc(db, 'shift_notes', d.id))));
+    const deletePromises = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => 
+      deleteDoc(doc(db, 'shift_notes', d.id))
+    );
+    await Promise.all(deletePromises);
     console.log(`[Firebase] Deleted ${snap.docs.length} shift notes for ${shiftId}`);
-  } catch (err) {
-    console.warn('[Firebase] Error deleting shift notes (non-critical):', err);
+  } catch (err: any) {
+    // Log but don't throw - this is non-critical cleanup
+    console.log('[Firebase] Note: Could not delete shift notes (non-critical):', err?.code || err?.message || 'unknown error');
   }
 }
 
@@ -627,11 +631,20 @@ export async function setShiftEdit(edit: ShiftEditDoc): Promise<void> {
   try {
     const docId = `${edit.empId}_${edit.date}`;
     const docRef = doc(db, 'shift_edits', docId);
-    await setDoc(docRef, {
-      ...edit,
+    
+    // Build payload - only include defined fields
+    const payload: any = {
+      empId: edit.empId,
+      date: edit.date,
       updatedAt: serverTimestamp(),
-    }, { merge: true });
-    console.log('[Firebase] Shift edit saved:', docId);
+    };
+    
+    if (edit.customStart !== undefined) payload.customStart = edit.customStart;
+    if (edit.customEnd !== undefined) payload.customEnd = edit.customEnd;
+    if (edit.note !== undefined) payload.note = edit.note;
+    
+    await setDoc(docRef, payload, { merge: true });
+    console.log('[Firebase] Shift edit saved:', docId, 'fields:', Object.keys(payload).length);
   } catch (err) {
     console.error('[Firebase] Failed to save shift edit:', err);
     throw err;

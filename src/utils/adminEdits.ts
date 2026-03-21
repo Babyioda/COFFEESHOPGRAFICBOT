@@ -25,7 +25,7 @@ export function loadShiftEdits(): ShiftEdit[] {
   catch { return []; }
 }
 
-import { addShiftNote, deleteShiftNotes, setShiftEdit, setEmpNote, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
+import { addShiftNote, deleteShiftNotes, setShiftEdit, deleteShiftEditDoc, setEmpNote, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
 
 function saveShiftEditToLocal(edit: ShiftEdit) {
   const all = loadShiftEdits();
@@ -85,16 +85,8 @@ export function saveShiftEdit(edit: ShiftEdit): void {
     addShiftNote(`${edit.empId}-${edit.date}`, edit.note).catch((err) => {
       console.error('[AdminEdits] Failed to sync shift note to Firebase:', err);
     });
-  } else {
-    // If note is empty, delete existing shift notes for this shift
-    // Only delete if we have a valid key
-    const shiftKey = `${edit.empId}-${edit.date}`;
-    if (shiftKey && shiftKey.length > 0) {
-      deleteShiftNotes(shiftKey).catch((err) => {
-        console.warn('[AdminEdits] Info: shift notes not found or already deleted (this is OK):', err);
-      });
-    }
   }
+  // Note: We don't try to delete shift_notes here, as it's not critical if they exist
 }
 
 export function deleteShiftEdit(empId: string, date: string): void {
@@ -103,27 +95,20 @@ export function deleteShiftEdit(empId: string, date: string): void {
   // Delete locally first so UI updates immediately
   deleteShiftEditFromLocal(empId, date);
 
-  // Delete from Firebase first (primary)
-  setShiftEdit({
-    empId,
-    date,
-    customStart: undefined,
-    customEnd: undefined,
-    note: undefined,
-  }).then(() => {
+  // Delete the shift edit document completely from Firebase (primary)
+  deleteShiftEditDoc(empId, date).then(() => {
     console.log('[AdminEdits] Shift edit deleted from Firebase successfully');
   }).catch((err) => {
     console.error('[AdminEdits] Failed to delete shift edit from Firebase:', err);
     alert('❌ Не удалось удалить правку смены из Firebase. Проверьте соединение.');
   });
 
-  // Also delete associated shift notes
+  // Also delete associated shift notes (async, non-critical)
   const shiftKey = `${empId}-${date}`;
-  if (shiftKey && shiftKey.length > 0) {
-    deleteShiftNotes(shiftKey).catch((err) => {
-      console.warn('[AdminEdits] Info: shift notes not found when deleting (this is OK):', err);
-    });
-  }
+  deleteShiftNotes(shiftKey).catch((err) => {
+    // Non-critical error - just log it
+    console.log('[AdminEdits] Shift notes cleanup info (non-critical):', err?.message || 'unknown');
+  });
 
   // Sync deletion to Apps Script as async task
   syncShiftDeleteToServer(empId, date).catch(err => {
