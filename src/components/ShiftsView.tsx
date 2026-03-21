@@ -927,6 +927,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
   // Force re-render when shift edits change
   const [shiftEditsUpdateKey, setShiftEditsUpdateKey] = useState(0);
+  const [shiftEditsMap, setShiftEditsMap] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const d = fakeDate ?? new Date();
@@ -945,7 +946,14 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
     // Subscribe to shift edits
     const unsubShiftEdits = watchShiftEdits((edits: any[]) => {
       if (!mounted) return;
-      console.log('[ShiftsView] Shift edits updated, triggering re-render:', edits);
+      // Build map by empId-date key
+      const editMap: Record<string, any> = {};
+      edits.forEach(edit => {
+        editMap[`${edit.empId}-${edit.date}`] = edit;
+      });
+      console.log('[ShiftsView] *** FIREBASE SHIFT EDITS UPDATED ***', editMap);
+      console.log('[ShiftsView] Total shift edits from Firebase:', edits.length);
+      setShiftEditsMap(editMap);
       setShiftEditsUpdateKey(k => k + 1);
     });
     unsubscribers.push(unsubShiftEdits);
@@ -990,6 +998,22 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
   const linkedEmp = linkedEmpId ? data.employees.find(e => e.id === linkedEmpId) : null;
 
+  // Get shift edit from Firebase map first, fallback to localStorage
+  const getShiftEditFromFirebase = (empId: string, dateStr: string) => {
+    const key = `${empId}-${dateStr}`;
+    const fbEdit = shiftEditsMap[key];
+    if (fbEdit) {
+      console.log('[ShiftsView] Retrieved Firebase shift edit for', key, ':', fbEdit);
+      return fbEdit;
+    }
+    // Fallback to localStorage
+    const localEdit = getShiftEdit(empId, dateStr);
+    if (localEdit) {
+      console.log('[ShiftsView] Retrieved localStorage shift edit for', key, ':', localEdit);
+    }
+    return localEdit;
+  };
+
   const CAL_CELL: Record<ShiftType, string> = isDark ? {
     daily:    'bg-violet-900/40 border-violet-600 text-violet-300',
     day:      'bg-blue-900/40 border-blue-600 text-blue-300',
@@ -1011,6 +1035,11 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
 
   // Use shiftEditsUpdateKey to trigger re-renders when shift edits change
   const calendarKey = `${month}-${year}-${shiftEditsUpdateKey}`;
+  
+  // Debug logging
+  if (Object.keys(shiftEditsMap).length > 0) {
+    console.log('[ShiftsView] Calendar re-rendering with shiftEditsMap:', calendarKey, Object.keys(shiftEditsMap).length, 'edits');
+  }
 
   return (
     <div className="w-full space-y-0">
@@ -1086,7 +1115,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
             const isMyWorking = !!myHours || myShift === 'daily' || myShift === 'day' || myShift === 'night' || (myEntry?.multipleShifts && myEntry.multipleShifts.length > 0);
 
             // Кастомное время для моей смены
-            const myCustom    = linkedEmp ? getShiftEdit(linkedEmp.id, dateStr) : null;
+            const myCustom    = linkedEmp ? getShiftEditFromFirebase(linkedEmp.id, dateStr) : null;
             
             let myTimeStart = myCustom?.customStart ?? myTimes?.start;
             let myTimeEnd   = myCustom?.customEnd   ?? myTimes?.end;
@@ -1117,10 +1146,13 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
               const cMultipleShifts = cEntry?.multipleShifts;
               const cShiftsWithTimes = cEntry?.shiftsWithTimes;
               const color  = ensureColleagueColor(cEmp);
-              const cCustom = getShiftEdit(cId, dateStr);
+              const cCustom = getShiftEditFromFirebase(cId, dateStr);
               const cRole = cEntry?.role || cEmp.role;
               const cDept = getDepartment(cRole);
               const cDeptIcon = cDept ? DEPARTMENT_CONFIG[cDept].icon : '';
+              if (cCustom) {
+                console.log('[ShiftsView] Colleague shift has custom time:', { cId, dateStr, cCustom });
+              }
               return {
                 shift: cShift,
                 emp: cEmp,
