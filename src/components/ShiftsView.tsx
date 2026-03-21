@@ -47,8 +47,8 @@ function getDeptColorByRole(role: string, fallback = '#6366f1'): string {
 
 const STORAGE_COLLEAGUE_COLORS = 'sf_colleague_colors';
 
-// Фиксированные цвета для коллег (красный, сиреневый, белый)
-const COLLEAGUE_COLORS = ['#ef4444', '#a855f7', '#ffffff'];
+// Фиксированные цвета для коллег (красный, темно-синий, розовый)
+const COLLEAGUE_COLORS = ['#ef4444', '#1e3a8a', '#ec4899'];
 
 function loadColleagueColors(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(STORAGE_COLLEAGUE_COLORS) || '{}'); } catch { return {}; }

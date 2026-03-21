@@ -360,8 +360,32 @@ export async function fetchShifts() {
 }
 
 export function watchShifts(cb: (items: any[]) => void) {
-  const q = query(collection(db, 'shifts'), orderBy('start', 'desc'));
-  return onSnapshot(q, (snap: any) => cb(snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }))));
+  try {
+    const q = query(collection(db, 'shifts'), orderBy('start', 'desc'));
+    return onSnapshot(
+      q,
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          cb(snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() })));
+        } catch (err) {
+          console.error('[Firebase] Error processing shifts snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with shifts (will retry automatically):', errorCode);
+        } else {
+          console.error('[Firebase] Watch error for shifts:', errorCode, err?.message);
+        }
+      }
+    );
+  } catch (err) {
+    console.error('[Firebase] Failed to set up watch for shifts:', err);
+    return () => {};
+  }
 }
 
 // Shift notes
@@ -410,13 +434,28 @@ export function watchShiftNotes(shiftId: string, cb: (items: any[]) => void) {
       where('shiftId', '==', shiftId),
       orderBy('createdAt', 'desc')
     );
-    return onSnapshot(q, (snap: any) => {
-      const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }));
-      console.log(`[Firebase] Watch: ${notes.length} shift notes for ${shiftId}`);
-      cb(notes);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for shift notes:', err);
-    });
+    return onSnapshot(
+      q,
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }));
+          console.log(`[Firebase] Watch: ${notes.length} shift notes for ${shiftId}`);
+          cb(notes);
+        } catch (err) {
+          console.error('[Firebase] Error processing shift notes snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue (will retry automatically):', errorCode);
+        } else {
+          console.error('[Firebase] Watch error for shift notes:', errorCode, err?.message);
+        }
+      }
+    );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for shift notes:', err);
     return () => {};
@@ -426,21 +465,39 @@ export function watchShiftNotes(shiftId: string, cb: (items: any[]) => void) {
 export function watchAllShiftNotes(cb: (items: any[]) => void) {
   try {
     const q = query(collection(db, 'shift_notes'));
-    return onSnapshot(q, (snap: any) => {
-      const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          ...data,
-          note: data.text || data.note || '', // Map 'text' field to 'note' for consistency
-        };
-      });
-      console.log(`[Firebase] Watch: ${notes.length} total shift notes`);
-      cb(notes);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for all shift notes:', err);
-      cb([]); // Graceful fallback
-    });
+    return onSnapshot(
+      q,
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => {
+            const data = d.data();
+            return {
+              id: d.id,
+              ...data,
+              note: data.text || data.note || '', // Map 'text' field to 'note' for consistency
+            };
+          });
+          console.log(`[Firebase] Watch: ${notes.length} total shift notes`);
+          cb(notes);
+        } catch (err) {
+          console.error('[Firebase] Error processing shift notes snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        const errorMsg = err?.message || 'Unknown error';
+        
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with shift_notes (will retry automatically):', errorMsg);
+        } else if (errorCode === 'permission-denied') {
+          console.error('[Firebase] PERMISSION DENIED: shift_notes collection needs read access');
+        } else {
+          console.error('[Firebase] Watch error for shift notes:', errorCode, errorMsg);
+        }
+      }
+    );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for all shift notes:', err);
     return () => {};
@@ -493,13 +550,28 @@ export function watchEmployeeNotes(employeeId: string, cb: (items: any[]) => voi
       where('employeeId', '==', employeeId),
       orderBy('createdAt', 'desc')
     );
-    return onSnapshot(q, (snap: any) => {
-      const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }));
-      console.log(`[Firebase] Watch: ${notes.length} employee notes for ${employeeId}`);
-      cb(notes);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for employee notes:', err);
-    });
+    return onSnapshot(
+      q,
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }));
+          console.log(`[Firebase] Watch: ${notes.length} employee notes for ${employeeId}`);
+          cb(notes);
+        } catch (err) {
+          console.error('[Firebase] Error processing employee notes snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with employee notes:', errorCode);
+        } else {
+          console.error('[Firebase] Watch error for employee notes:', errorCode, err?.message);
+        }
+      }
+    );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for employee notes:', err);
     return () => {};
@@ -592,13 +664,28 @@ export function watchEmployeeRules(employeeId: string, cb: (items: any[]) => voi
       where('employeeId', '==', employeeId),
       orderBy('createdAt', 'desc')
     );
-    return onSnapshot(q, (snap: any) => {
-      const rules = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }));
-      console.log(`[Firebase] Watch: ${rules.length} employee rules for ${employeeId}`);
-      cb(rules);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for employee rules:', err);
-    });
+    return onSnapshot(
+      q,
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          const rules = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ id: d.id, ...d.data() }));
+          console.log(`[Firebase] Watch: ${rules.length} employee rules for ${employeeId}`);
+          cb(rules);
+        } catch (err) {
+          console.error('[Firebase] Error processing employee rules snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with employee rules:', errorCode);
+        } else {
+          console.error('[Firebase] Watch error for employee rules:', errorCode, err?.message);
+        }
+      }
+    );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for employee rules:', err);
     return () => {};
@@ -665,17 +752,39 @@ export async function deleteShiftEditDoc(empId: string, date: string): Promise<v
 // Реалтайм слушатель для правок смен (shift_edits) - теперь используется для live sync
 export function watchShiftEdits(cb: (items: ShiftEditDoc[]) => void) {
   try {
-    return onSnapshot(collection(db, 'shift_edits'), (snap: any) => {
-      const edits = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as ShiftEditDoc));
-      console.log('[Firebase] Watch shift_edits updated:', edits.length, 'items');
-      cb(edits);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for shift_edits:', err.code, err.message);
-      if (err.code === 'permission-denied') {
-        console.error('[Firebase] PERMISSION DENIED: shift_edits collection needs read access.');
+    return onSnapshot(
+      collection(db, 'shift_edits'),
+      {
+        // Network request settings to handle QUIC protocol issues
+        source: 'default', // Try cache first, then network
+      },
+      (snap: any) => {
+        try {
+          const edits = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as ShiftEditDoc));
+          console.log('[Firebase] Watch shift_edits updated:', edits.length, 'items');
+          cb(edits);
+        } catch (err) {
+          console.error('[Firebase] Error processing shift_edits snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        // Handle different network and firestore errors gracefully
+        const errorCode = err?.code || 'unknown';
+        const errorMsg = err?.message || 'Unknown error';
+        
+        // Network errors (QUIC, connection timeouts, etc) - these are recoverable
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with shift_edits (will retry automatically):', errorMsg);
+        } else if (errorCode === 'permission-denied') {
+          console.error('[Firebase] PERMISSION DENIED: shift_edits collection needs read access');
+        } else {
+          console.error('[Firebase] Watch error for shift_edits:', errorCode, errorMsg);
+        }
+        // Keep the listener active - Firebase SDK will retry automatically
+        // Don't call cb([]) here, as that would show empty data on network hiccup
       }
-      cb([]); // Return empty array on error
-    });
+    );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for shift_edits:', err);
     return () => {};
@@ -767,18 +876,32 @@ export async function deleteUserLink(uid: string): Promise<void> {
 // Реалтайм слушатель для заметок по сотрудникам (emp_notes)
 export function watchEmpNotes(cb: (items: EmpNoteDoc[]) => void) {
   try {
-    return onSnapshot(collection(db, 'emp_notes'), (snap: any) => {
-      const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpNoteDoc));
-      console.log('[Firebase] Watch emp_notes updated:', notes.length, 'items');
-      cb(notes);
-    }, (err: any) => {
-      console.error('[Firebase] Watch error for emp_notes:', err.code, err.message);
-      if (err.code === 'permission-denied') {
-        console.error('[Firebase] PERMISSION DENIED: Check Firestore security rules. emp_notes collection needs read access.');
+    return onSnapshot(
+      collection(db, 'emp_notes'),
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          const notes = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpNoteDoc));
+          console.log('[Firebase] Watch emp_notes updated:', notes.length, 'items');
+          cb(notes);
+        } catch (err) {
+          console.error('[Firebase] Error processing emp_notes snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        const errorMsg = err?.message || 'Unknown error';
+        
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with emp_notes (will retry automatically):', errorMsg);
+        } else if (errorCode === 'permission-denied') {
+          console.error('[Firebase] PERMISSION DENIED: emp_notes collection needs read access');
+        } else {
+          console.error('[Firebase] Watch error for emp_notes:', errorCode, errorMsg);
+        }
       }
-      // Still call callback with empty array to avoid breaking UI
-      cb([]);
-    });
+    );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for emp_notes:', err);
     return () => {};
