@@ -333,6 +333,9 @@ function AppInner() {
         console.log('[App] 🔍 Map contents (sample):', Array.from(map.entries()).slice(0, 5));
         console.log('[App] 📋 All employee names in map:', Array.from(map.keys()).sort());
         setIsEmployeeDataLoaded(true);
+        
+        // Перезагружаем текущий месяц с новыми данными сотрудников
+        fetchSheetForMonth(sheetId, viewMonth, viewYear);
       } catch (err) {
         console.error('[App] Ошибка загрузки данных сотрудников:', err);
         setIsEmployeeDataLoaded(true); // Даже при ошибке считаем загруженным
