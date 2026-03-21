@@ -30,8 +30,10 @@ function doGet(e) {
     }
     
     // Получаем все данные со второй строки (первая - заголовок)
+    // Используем getDisplayValues(), чтобы получить ту текстовую дату, что видна в таблице,
+    // и избежать таймзонных смещений при неявном преобразовании Date.
     var range = sheet.getRange(2, 1, lastRow - 1, 3);
-    var values = range.getValues();
+    var values = range.getDisplayValues();
     
     var employees = [];
     
@@ -40,9 +42,13 @@ function doGet(e) {
       var tgUsername = String(values[i][1]).trim();
       var birthday = values[i][2];
       
-      // Если birthday - Date объект (если ячейка отформатирована как дата), конвертируем в строку
+      // Если birthday - Date объект (если ячейка отформатирована как дата), берем чистые день/месяц, чтобы избежать смещения при таймзоне
       if (birthday instanceof Date) {
-        birthday = Utilities.formatDate(birthday, Session.getScriptTimeZone(), "dd.MM.yyyy");
+        var ddNum = birthday.getDate();
+        var mmNum = birthday.getMonth() + 1;
+        var ddStr = (ddNum < 10 ? '0' : '') + ddNum;
+        var mmStr = (mmNum < 10 ? '0' : '') + mmNum;
+        birthday = ddStr + '.' + mmStr + '.' + birthday.getFullYear();
       } else {
         birthday = String(birthday).trim();
       }

@@ -20,7 +20,7 @@ const STORAGE_KEY_API             = 'ss_sheets_api_key';
 const STORAGE_KEY_SCRIPT          = 'ss_apps_script_url';
 const STORAGE_KEY_EMPLOYEE_SCRIPT = 'ss_employee_data_script_url';
 const DEFAULT_SCRIPT_URL          = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
-const DEFAULT_EMPLOYEE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyKT6tqexp3816Nm7ROYS36GaMEK36lEr5VyTpm_H4LLSALv2iwV-RWxqmNDZDleW0H/exec';
+const DEFAULT_EMPLOYEE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxO6IFCD60vNdMMTtI71wOhZoRSopZe_2B9R9JZNwazSNIlVjZSKQBgPbPglLpWqf2O/exec';
 const STORAGE_FAKE_DATE           = 'ss_fake_date';
 
 if (!localStorage.getItem(STORAGE_KEY_ID)) {
