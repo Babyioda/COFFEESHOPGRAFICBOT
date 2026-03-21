@@ -1056,11 +1056,6 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                   } : {}),
                 }}
               >
-                {/* Индикатор правки администратора */}
-                {isAdmin && myCustom && (
-                  <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                )}
-
                 {/* Birthday indicator */}
                 {birthdayCelebrants.length > 0 && (
                   <div className="absolute top-0.5 left-0.5 text-xs">🎂</div>

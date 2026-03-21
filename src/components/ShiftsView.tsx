@@ -925,6 +925,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
     catch { return []; }
   });
 
+  // Force re-render when shift edits change
+  const [shiftEditsUpdateKey, setShiftEditsUpdateKey] = useState(0);
+
   useEffect(() => {
     const d = fakeDate ?? new Date();
     const newMonth = d.getMonth() + 1;
@@ -933,6 +936,27 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
     setYear(newYear);
     onMonthChange?.(newMonth, newYear);
   }, [fakeDate]);
+
+  // Listen to shift edits changes from Firebase (real-time updates)
+  useEffect(() => {
+    let mounted = true;
+    const unsubscribers: (() => void)[] = [];
+
+    // Subscribe to shift edits
+    const unsubShiftEdits = watchShiftEdits((edits: any[]) => {
+      if (!mounted) return;
+      console.log('[ShiftsView] Shift edits updated, triggering re-render:', edits);
+      setShiftEditsUpdateKey(k => k + 1);
+    });
+    unsubscribers.push(unsubShiftEdits);
+
+    return () => {
+      mounted = false;
+      unsubscribers.forEach(unsub => {
+        try { unsub?.(); } catch (err) { console.error('[ShiftsView] Error unsubscribing:', err); }
+      });
+    };
+  }, []);
 
   const todayStr    = formatDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
   const daysInMonth = new Date(year, month, 0).getDate();
@@ -985,6 +1009,9 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
   const sub  = isDark ? 'text-slate-400' : 'text-gray-500';
   const card = isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100';
 
+  // Use shiftEditsUpdateKey to trigger re-renders when shift edits change
+  const calendarKey = `${month}-${year}-${shiftEditsUpdateKey}`;
+
   return (
     <div className="w-full space-y-0">
 
@@ -1028,7 +1055,7 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
       </div>
 
       {/* ── Календарь ── */}
-      <div className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
+      <div key={calendarKey} className={`rounded-2xl border shadow-sm overflow-hidden ${card}`}>
         {/* Дни недели */}
         <div className="grid grid-cols-7 border-b border-inherit">
           {DAY_LABELS_SHORT.map((d, i) => (
@@ -1137,11 +1164,6 @@ export const ShiftsView: React.FC<ShiftsViewProps> = ({ data, fakeDate, linkedEm
                   } : {}),
                 }}
               >
-                {/* Индикатор правки администратора */}
-                {isAdmin && myCustom && (
-                  <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400" />
-                )}
-
                 {/* Birthday indicator */}
                 {birthdayCelebrants.length > 0 && (
                   <div className="absolute top-0.5 left-0.5 text-xs">🎂</div>
