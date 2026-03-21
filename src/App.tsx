@@ -59,6 +59,7 @@ function AppInner() {
     return stored;
   });
   const [employeeDataMap, setEmployeeDataMap] = useState<Map<string, EmployeeData>>(new Map());
+  const [isEmployeeDataLoaded, setIsEmployeeDataLoaded] = useState(false);
 
   // Текущий месяц для просмотра
   const today = new Date();
@@ -206,6 +207,7 @@ function AppInner() {
 
       // Применяем данные сотрудников (Birthday, Telegram, Preferences)
       // Данные с Apps Script применяются по имени, preferences из Firebase применяются по ID
+      console.log('[App] 📋 Employee names from schedule:', parsed.employees.map(e => e.name.toLowerCase()).sort());
       const employeesWithData = parsed.employees.map(emp => {
         // 1. Заполняем из Apps Script (birthday, tgUsername)
         const empNameLower = emp.name.toLowerCase();
@@ -286,7 +288,7 @@ function AppInner() {
 
   // ── Первичная загрузка — получаем список листов, потом данные текущего месяца ──
   useEffect(() => {
-    if (!sheetId) return;
+    if (!sheetId || !isEmployeeDataLoaded) return;
     const currentMonth = effectiveToday.getMonth() + 1;
     const currentYear  = effectiveToday.getFullYear();
 
@@ -329,8 +331,11 @@ function AppInner() {
         setEmployeeDataMap(map);
         console.log('[App] ✅ Loaded data map:', map.size, 'employees');
         console.log('[App] 🔍 Map contents (sample):', Array.from(map.entries()).slice(0, 5));
+        console.log('[App] 📋 All employee names in map:', Array.from(map.keys()).sort());
+        setIsEmployeeDataLoaded(true);
       } catch (err) {
         console.error('[App] Ошибка загрузки данных сотрудников:', err);
+        setIsEmployeeDataLoaded(true); // Даже при ошибке считаем загруженным
       }
     };
 

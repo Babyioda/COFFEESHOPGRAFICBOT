@@ -82,7 +82,7 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
     : 'linear-gradient(135deg,#6366f1,#8b5cf6)';
 
   const tgUsername = emp.tgUsername || '';
-  const showTelegramPref = emp.showTelegram ?? false;
+  const showTelegramPref = emp.showTelegram ?? !!emp.tgUsername;
   const tgError = showTelegramPref && !tgUsername ? 'Telegram не указан администратором' : '';
 
   const CAL_CELL: Record<ShiftType, string> = isDark ? {
