@@ -521,8 +521,10 @@ export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData
   }
 
   try {
-    console.log('[useGoogleSheets] Загружаем данные сотрудников из:', scriptUrl);
-    const res = await fetch(scriptUrl);
+    // Добавляем timestamp для обхода кэширования
+    const cacheBustUrl = scriptUrl + (scriptUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    console.log('[useGoogleSheets] Загружаем данные сотрудников из:', cacheBustUrl);
+    const res = await fetch(cacheBustUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     
     const json = await res.json();

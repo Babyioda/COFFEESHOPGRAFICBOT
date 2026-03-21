@@ -38,7 +38,14 @@ function doGet(e) {
     for (var i = 0; i < values.length; i++) {
       var name = String(values[i][0]).trim();
       var tgUsername = String(values[i][1]).trim();
-      var birthday = String(values[i][2]).trim();
+      var birthday = values[i][2];
+      
+      // Если birthday - Date объект (если ячейка отформатирована как дата), конвертируем в строку
+      if (birthday instanceof Date) {
+        birthday = Utilities.formatDate(birthday, Session.getScriptTimeZone(), "dd.MM.yyyy");
+      } else {
+        birthday = String(birthday).trim();
+      }
       
       // Пропускаем пустые строки
       if (!name) continue;
@@ -48,9 +55,12 @@ function doGet(e) {
       if (birthday && birthday.length >= 5) {
         var parts = birthday.split('.');
         if (parts.length === 3) {
-          var dd = parts[0];
-          var mm = parts[1];
-          birthdayMmDd = mm + '-' + dd;
+          var dd = parts[0].trim();
+          var mm = parts[1].trim();
+          var yy = parts[2].trim();
+          if (dd && mm && yy) {
+            birthdayMmDd = mm + '-' + dd;
+          }
         }
       }
       
