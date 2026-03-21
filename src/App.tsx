@@ -59,6 +59,7 @@ function AppInner() {
     return stored;
   });
   const [employeeDataMap, setEmployeeDataMap] = useState<Map<string, EmployeeData>>(new Map());
+  const employeeDataMapRef = useRef<Map<string, EmployeeData>>(new Map());
   const [isEmployeeDataLoaded, setIsEmployeeDataLoaded] = useState(false);
 
   // Текущий месяц для просмотра
@@ -211,7 +212,7 @@ function AppInner() {
       const employeesWithData = parsed.employees.map(emp => {
         // 1. Заполняем из Apps Script (birthday, tgUsername)
         const empNameLower = emp.name.toLowerCase();
-        const empData = employeeDataMap.get(empNameLower);
+        const empData = employeeDataMapRef.current.get(empNameLower);
         console.log(`[App] 🔍 Searching for "${emp.name}" (${empNameLower}) in map... Found:`, !!empData);
         if (empData) {
           emp.birthday = empData.birthday || undefined;
@@ -223,7 +224,7 @@ function AppInner() {
             console.log(`[App] 💬 Applied Telegram to ${emp.name}: @${empData.tgUsername}`);
           }
         } else {
-          console.log(`[App] ❌ No data found for "${emp.name}" in employeeDataMap (size: ${employeeDataMap.size})`);
+          console.log(`[App] ❌ No data found for "${emp.name}" in employeeDataMap (size: ${employeeDataMapRef.current.size})`);
         }
         
         // 2. Меняем из Firebase emp_prefs (showTelegram, customUsername)
@@ -329,13 +330,11 @@ function AppInner() {
         }
         
         setEmployeeDataMap(map);
+        employeeDataMapRef.current = map;
         console.log('[App] ✅ Loaded data map:', map.size, 'employees');
         console.log('[App] 🔍 Map contents (sample):', Array.from(map.entries()).slice(0, 5));
         console.log('[App] 📋 All employee names in map:', Array.from(map.keys()).sort());
         setIsEmployeeDataLoaded(true);
-        
-        // Перезагружаем текущий месяц с новыми данными сотрудников
-        fetchSheetForMonth(sheetId, viewMonth, viewYear);
       } catch (err) {
         console.error('[App] Ошибка загрузки данных сотрудников:', err);
         setIsEmployeeDataLoaded(true); // Даже при ошибке считаем загруженным
@@ -359,11 +358,11 @@ function AppInner() {
 
   // ── Перезагружаем лист когда employeeDataMap обновится ──
   useEffect(() => {
-    if (employeeDataMap.size > 0 && sheetId && viewMonth && viewYear) {
+    if (isEmployeeDataLoaded && sheetId && viewMonth && viewYear) {
       console.log('[App] 📂 employeeDataMap updated, reloading sheet with birthday data...');
       fetchSheetForMonth(sheetId, viewMonth, viewYear);
     }
-  }, [employeeDataMap]);
+  }, [isEmployeeDataLoaded, sheetId, viewMonth, viewYear]);
 
 
   const handleSaveSettings = (id: string, gid: string, apiKey?: string, scriptUrl?: string, employeeScriptUrl?: string) => {
