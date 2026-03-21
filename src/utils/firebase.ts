@@ -193,6 +193,7 @@ import {
   setDoc,
   doc,
   getDocs,
+  getDoc,
   query,
   where,
   orderBy,
@@ -904,6 +905,91 @@ export function watchEmpNotes(cb: (items: EmpNoteDoc[]) => void) {
     );
   } catch (err) {
     console.error('[Firebase] Failed to set up watch for emp_notes:', err);
+    return () => {};
+  }
+}
+
+// ======== Employee Preferences (birthday, showTelegram, tgUsername, customUsername) ========
+export interface EmpPrefsDoc {
+  empId: string;
+  birthday?: string;        // "mm-dd" format
+  showTelegram?: boolean;
+  tgUsername?: string;      // Telegram username without @
+  customUsername?: string;  // Custom display name
+  updatedAt?: any;
+}
+
+export async function setEmpPrefs(prefs: EmpPrefsDoc): Promise<void> {
+  try {
+    if (!prefs.empId) throw new Error('empId is required');
+    const docRef = doc(db, 'emp_prefs', prefs.empId);
+    await setDoc(docRef, {
+      empId: prefs.empId,
+      birthday: prefs.birthday,
+      showTelegram: prefs.showTelegram,
+      tgUsername: prefs.tgUsername,
+      customUsername: prefs.customUsername,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    console.log('[Firebase] Employee prefs saved:', { empId: prefs.empId, birthday: prefs.birthday, showTelegram: prefs.showTelegram });
+  } catch (err) {
+    console.error('[Firebase] Failed to save employee prefs:', err);
+    throw err;
+  }
+}
+
+export async function getEmpPrefs(empId: string): Promise<EmpPrefsDoc | null> {
+  try {
+    const docRef = doc(db, 'emp_prefs', empId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    return snap.data() as EmpPrefsDoc;
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch employee prefs:', err);
+    return null;
+  }
+}
+
+export async function fetchAllEmpPrefs(): Promise<EmpPrefsDoc[]> {
+  try {
+    const snap = await getDocs(collection(db, 'emp_prefs'));
+    return snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
+  } catch (err) {
+    console.error('[Firebase] Failed to fetch all employee prefs:', err);
+    return [];
+  }
+}
+
+export function watchEmpPrefs(cb: (items: EmpPrefsDoc[]) => void) {
+  try {
+    return onSnapshot(
+      collection(db, 'emp_prefs'),
+      { source: 'default' }, // Try cache first, then network
+      (snap: any) => {
+        try {
+          const prefs = snap.docs.map((d: QueryDocumentSnapshot<DocumentData>) => ({ ...d.data() } as EmpPrefsDoc));
+          console.log('[Firebase] Watch emp_prefs updated:', prefs.length, 'items');
+          cb(prefs);
+        } catch (err) {
+          console.error('[Firebase] Error processing emp_prefs snapshot:', err);
+          cb([]);
+        }
+      },
+      (err: any) => {
+        const errorCode = err?.code || 'unknown';
+        const errorMsg = err?.message || 'Unknown error';
+        
+        if (errorCode.includes('QUIC') || errorCode.includes('NETWORK') || errorCode === 'unavailable') {
+          console.warn('[Firebase] Temporary network issue with emp_prefs (will retry automatically):', errorMsg);
+        } else if (errorCode === 'permission-denied') {
+          console.error('[Firebase] PERMISSION DENIED: emp_prefs collection needs read access');
+        } else {
+          console.error('[Firebase] Watch error for emp_prefs:', errorCode, errorMsg);
+        }
+      }
+    );
+  } catch (err) {
+    console.error('[Firebase] Failed to set up watch for emp_prefs:', err);
     return () => {};
   }
 }

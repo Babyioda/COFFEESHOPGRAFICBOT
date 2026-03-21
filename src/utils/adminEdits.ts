@@ -25,7 +25,7 @@ export function loadShiftEdits(): ShiftEdit[] {
   catch { return []; }
 }
 
-import { addShiftNote, deleteShiftNotes, setShiftEdit, deleteShiftEditDoc, setEmpNote, setUserLink, deleteUserLink, getCurrentUid } from './firebase';
+import { addShiftNote, deleteShiftNotes, setShiftEdit, deleteShiftEditDoc, setEmpNote, setUserLink, deleteUserLink, getCurrentUid, setEmpPrefs } from './firebase';
 
 function saveShiftEditToLocal(edit: ShiftEdit) {
   const all = loadShiftEdits();
@@ -355,4 +355,94 @@ export async function sendDebugToAdmins(params: {
   appsScriptUrl?: string;
 }): Promise<void> {
   return syncDebugToServer(params.empName, params.empDept, params.empRoles, params.tgUsername, params.tgId, params.appsScriptUrl);
+}
+
+// ── Employee Preferences (birthday, showTelegram, tgUsername) ──────
+
+const STORAGE_EMP_PREFS = 'sf_emp_prefs_cache';
+
+export interface EmployeePrefs {
+  empId: string;
+  birthday?: string;        // "mm-dd" format
+  showTelegram?: boolean;
+  tgUsername?: string;      // Telegram username without @
+  customUsername?: string;  // Custom display name
+}
+
+export function loadEmpPrefs(): EmployeePrefs[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_EMP_PREFS) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+export function getEmpPrefs(empId: string): EmployeePrefs | null {
+  const all = loadEmpPrefs();
+  return all.find(p => p.empId === empId) ?? null;
+}
+
+function saveEmpPrefsToLocal(prefs: EmployeePrefs): void {
+  const all = loadEmpPrefs();
+  const idx = all.findIndex(p => p.empId === prefs.empId);
+  
+  if (idx >= 0) {
+    all[idx] = { ...all[idx], ...prefs };
+  } else {
+    all.push(prefs);
+  }
+  
+  try {
+    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(all));
+    console.log('[AdminEdits] Employee prefs saved to localStorage (cache)', { empId: prefs.empId });
+  } catch (err) {
+    console.error('[AdminEdits] Failed to cache employee prefs to localStorage:', err);
+  }
+}
+
+export function cacheEmpPrefs(prefsList: EmployeePrefs[]): void {
+  try {
+    const existing = loadEmpPrefs();
+    const map = new Map<string, EmployeePrefs>();
+    
+    // Load existing into map
+    for (const p of existing) {
+      if (p.empId) map.set(p.empId, p);
+    }
+    
+    // Merge new prefs
+    for (const p of prefsList) {
+      if (p.empId) {
+        map.set(p.empId, { ...map.get(p.empId), ...p });
+      }
+    }
+    
+    // Convert back to array and save
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_EMP_PREFS, JSON.stringify(merged));
+    console.log('[AdminEdits] Cached employee prefs to localStorage (merged)', merged.length, 'items');
+  } catch (err) {
+    console.error('[AdminEdits] Failed to cache employee prefs to localStorage:', err);
+  }
+}
+
+export function saveEmpPrefs(prefs: EmployeePrefs): void {
+  console.log('[AdminEdits] Saving employee prefs:', { empId: prefs.empId, birthday: prefs.birthday, showTelegram: prefs.showTelegram, tgUsername: prefs.tgUsername });
+  
+  // Persist locally immediately
+  saveEmpPrefsToLocal(prefs);
+  
+  // Save to Firebase (primary source)
+  setEmpPrefs({
+    empId: prefs.empId,
+    birthday: prefs.birthday,
+    showTelegram: prefs.showTelegram,
+    tgUsername: prefs.tgUsername,
+    customUsername: prefs.customUsername,
+  }).then(() => {
+    console.log('[AdminEdits] Employee prefs saved to Firebase successfully');
+  }).catch((err) => {
+    console.error('[AdminEdits] Failed to save employee prefs to Firebase:', err);
+    // Don't show alert - this is non-critical for shifting functionality
+  });
 }

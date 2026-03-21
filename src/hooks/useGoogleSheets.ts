@@ -505,6 +505,8 @@ export interface EmployeeData {
   name: string;
   tgUsername: string;
   birthday: string; // мм-дд
+  showTelegram?: boolean;
+  customUsername?: string;
 }
 
 /**

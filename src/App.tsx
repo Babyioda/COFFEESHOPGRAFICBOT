@@ -7,6 +7,7 @@ import { getTgUserId } from './utils/telegram';
 
 const ADMIN_TG_IDS = [783948887, 6147055724];
 import { getEmpPrefs, getLinkedEmpId, saveLinkedEmpId, cacheEmpPrefs } from './utils/adminEdits';
+import { watchEmpPrefs } from './utils/firebase';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 type TabId = 'shifts' | 'profile';
@@ -203,8 +204,10 @@ function AppInner() {
         console.log('[App] CSV fallback returned:', text.split('\n').length, 'rows');
       }
 
-      // Применяем данные сотрудников (Birthday, Telegram) по имени
+      // Применяем данные сотрудников (Birthday, Telegram, Preferences)
+      // Данные с Apps Script применяются по имени, preferences из Firebase применяются по ID
       const employeesWithData = parsed.employees.map(emp => {
+        // 1. Заполняем из Apps Script (birthday, tgUsername)
         const empNameLower = emp.name.toLowerCase();
         const empData = employeeDataMap.get(empNameLower);
         console.log(`[App] 🔍 Searching for "${emp.name}" (${empNameLower}) in map... Found:`, !!empData);
@@ -214,12 +217,25 @@ function AppInner() {
           if (empData.birthday) {
             console.log(`[App] 🎂 Applied birthday to ${emp.name}: ${empData.birthday}`);
           }
+          if (empData.tgUsername) {
+            console.log(`[App] 💬 Applied Telegram to ${emp.name}: @${empData.tgUsername}`);
+          }
         } else {
           console.log(`[App] ❌ No data found for "${emp.name}" in employeeDataMap (size: ${employeeDataMap.size})`);
         }
+        
+        // 2. Меняем из Firebase emp_prefs (showTelegram, customUsername)
+        const empPrefs = getEmpPrefs(emp.id);
+        if (empPrefs) {
+          emp.showTelegram = empPrefs.showTelegram;
+          emp.customUsername = empPrefs.customUsername;
+          console.log(`[App] ⚙️ Applied prefs to ${emp.name}: showTelegram=${empPrefs.showTelegram}`);
+        }
+        
         return emp;
       });
       console.log('[App] 🎂 Employees with birthdays:', parsed.employees.filter(e => e.birthday).map(e => `${e.name} (${e.birthday})`).join(', ') || 'нет');
+      console.log('[App] 💬 Employees with Telegram:', parsed.employees.filter(e => e.tgUsername).map(e => `${e.name} (@${e.tgUsername})`).join(', ') || 'нет');
       parsed.employees = employeesWithData;
       dataCache.set(cacheKey, parsed);
       setLiveData(parsed);
@@ -320,6 +336,18 @@ function AppInner() {
 
     loadEmployeeData();
   }, [employeeDataScriptUrl]);
+
+  // ── Загрузка emp_prefs из Firebase и кэширование ──
+  useEffect(() => {
+    console.log('[App] Setting up emp_prefs listener...');
+    const unsubscribe = watchEmpPrefs((prefs) => {
+      console.log('[App] 🔄 emp_prefs updated from Firebase:', prefs.length, 'items');
+      // Cache to localStorage for next load
+      cacheEmpPrefs(prefs);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // ── Перезагружаем лист когда employeeDataMap обновится ──
   useEffect(() => {
@@ -481,7 +509,6 @@ function AppInner() {
         <div className="flex">
           {TABS.map(tab => {
             // Вкладка смены теперь всегда доступна
-            const isLocked = false;
             const isActive = effectiveTab === tab.id;
             return (
               <button
