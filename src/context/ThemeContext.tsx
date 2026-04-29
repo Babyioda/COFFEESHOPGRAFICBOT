@@ -1,8 +1,3 @@
-/**
- * 🌐 ThemeContext - управление темой приложения (light/dark)
- * Сохраняет выбор пользователя в localStorage
- */
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 type Theme = 'light' | 'dark';

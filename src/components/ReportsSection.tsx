@@ -125,6 +125,24 @@ interface ReportsSectionProps {
   onRefresh?: (month: number, year: number) => void;
 }
 
+function generateReportText(emp: Employee, report: MonthlyReport, monthLabel: string): string {
+  if (report.byRole.length === 0) {
+    return `📊 Итоги за ${monthLabel}\n\n👤 ${emp.name}\n⏱ Всего часов: 0`;
+  }
+
+  if (report.byRole.length === 1) {
+    const role = report.byRole[0];
+    return `📊 Итоги за ${monthLabel}\n\n👤 ${emp.name} (${role.role})\n⏱ Всего часов: ${Math.round(report.totalHours * 100) / 100}`;
+  }
+
+  // Несколько должностей
+  let text = `📊 Итоги за ${monthLabel}\n\n👤 ${emp.name}\n`;
+  for (const role of report.byRole) {
+    text += `${role.role} : ${Math.round(role.hours * 100) / 100} ч\n`;
+  }
+  return text;
+}
+
 export const ReportsSection: React.FC<ReportsSectionProps> = ({ data, linkedEmpId, onRefresh }) => {
   const { isDark } = useTheme();
   const now = new Date();
