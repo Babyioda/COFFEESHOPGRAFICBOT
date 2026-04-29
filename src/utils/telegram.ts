@@ -1,4 +1,6 @@
-// ── Telegram WebApp SDK helpers ──────────────────────────────────
+/**
+ * 🌐 Telegram Utilities - работа с Telegram WebApp SDK
+ */
 
 export interface TelegramUser {
   id: number;
@@ -91,7 +93,7 @@ export function initTelegramApp() {
   const tg = getTg();
   if (!tg) return;
   tg.ready();
-  tg.expand(); // разворачиваем на весь экран
+  tg.expand();
 }
 
 /** Открыть чат с пользователем в Telegram */
@@ -105,169 +107,32 @@ export function openTelegramChat(username: string) {
   }
 }
 
-
-
-// ── Синхронизация с Apps Script ──────────────────────────────────
-
-const STORAGE_KEY_SCRIPT = 'ss_apps_script_url';
-const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz1CSkgdNoCfExOQxbCQoceInqFubJlGXKW10awXG99ron29IgTJMZeOx6nCseMGqSx/exec';
-
-/** Синхронизировать привязку tgId → empName в Google Sheets (лист Employees) */
-export async function syncTgLink(empName: string, tgId: number): Promise<void> {
-  const scriptUrl = localStorage.getItem(STORAGE_KEY_SCRIPT) || DEFAULT_SCRIPT_URL;
-  if (!scriptUrl) return;
-  try {
-    const payload = { action: 'link', empName, tgId: String(tgId) };
-    console.log('syncTgLink -> POST', scriptUrl, payload);
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    let text = '';
-    try { text = await response.text(); } catch (e) { /* ignore */ }
-    if (!response.ok) {
-      console.error(`❌ syncTgLink ошибка: ${response.status} ${response.statusText}`, text);
-    } else {
-      console.log(`✅ syncTgLink успешно: ${empName} (${tgId})`, response.status, text);
-    }
-  } catch (err) {
-    console.error('❌ syncTgLink ошибка сети:', err);
+/** Показать алерт в Telegram */
+export function showTelegramAlert(message: string, callback?: () => void) {
+  const tg = getTg();
+  if (tg) {
+    tg.showAlert(message, callback);
+  } else {
+    alert(message);
+    callback?.();
   }
 }
 
-// ── Привязка Telegram ID ─────────────────────────────────────────
-
-const STORAGE_TG_LINKS = 'sf_tg_links'; // { tgId: empId }
-
-/** Загрузить все привязки tgId → empId */
-export function loadTgLinks(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_TG_LINKS) || '{}');
-  } catch {
-    return {};
+/** Показать подтверждение в Telegram */
+export function showTelegramConfirm(message: string, callback: (confirmed: boolean) => void) {
+  const tg = getTg();
+  if (tg) {
+    tg.showConfirm(message, callback);
+  } else {
+    const confirmed = confirm(message);
+    callback(confirmed);
   }
 }
 
-/** Сохранить привязку tgId → empId */
-export function saveTgLink(tgId: number, empId: string) {
-  const links = loadTgLinks();
-  links[String(tgId)] = empId;
-  localStorage.setItem(STORAGE_TG_LINKS, JSON.stringify(links));
-}
-
-/** Удалить привязку для tgId */
-export function removeTgLink(tgId: number) {
-  const links = loadTgLinks();
-  delete links[String(tgId)];
-  localStorage.setItem(STORAGE_TG_LINKS, JSON.stringify(links));
-}
-
-/** Найти empId по tgId */
-export function getEmpIdByTgId(tgId: number): string | null {
-  const links = loadTgLinks();
-  return links[String(tgId)] ?? null;
-}
-
-// ── Коды приглашений ─────────────────────────────────────────────
-
-const STORAGE_INVITE_CODES = 'sf_invite_codes'; // { code: empId }
-
-// Хардкодные коды администраторов { код → Telegram ID }
-// ADM1 = Овчаренко Владимир, ADM2 = Шмакова Милена
-export const ADMIN_HARDCODED_CODES: Record<string, number> = {
-  'ADM1': 6147055724, // Овчаренко Владимир
-  'ADM2': 783948887,  // Шмакова Милена
-};
-
-/** Генерировать случайный 6-значный код */
-export function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+/** Завибрировать (если доступно) */
+export function hapticFeedback(type: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') {
+  const tg = getTg();
+  if (tg?.HapticFeedback) {
+    tg.HapticFeedback.impactOccurred(type);
   }
-  return code;
-}
-
-/** Загрузить все коды */
-export function loadInviteCodes(): Record<string, string> {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_INVITE_CODES) || '{}');
-  } catch {
-    return {};
-  }
-}
-
-/** Сохранить код для сотрудника */
-export function saveInviteCode(code: string, empId: string) {
-  const codes = loadInviteCodes();
-  codes[code.toUpperCase()] = empId;
-  localStorage.setItem(STORAGE_INVITE_CODES, JSON.stringify(codes));
-}
-
-/** Найти empId по коду */
-export function getEmpIdByCode(code: string): string | null {
-  const upper = code.toUpperCase().trim();
-  // Сначала проверяем хардкодные коды администраторов
-  if (upper in ADMIN_HARDCODED_CODES) {
-    const tgId = ADMIN_HARDCODED_CODES[upper];
-    // Ищем уже привязанный empId для этого tgId
-    const existing = getEmpIdByTgId(tgId);
-    if (existing) return existing;
-    // Возвращаем специальный маркер — empId будет найден по имени в ProfileView
-    return `__admin_tgid_${tgId}__`;
-  }
-  const codes = loadInviteCodes();
-  return codes[upper] ?? null;
-}
-
-/**
- * Удалить все привязки Telegram ID для заданного сотрудника.
- * Используется для "выхода" сотрудника из всех сессий.
- */
-export function clearTgLinksForEmp(empId: string) {
-  const links = loadTgLinks();
-  let changed = false;
-  
-  // Найти все tgId привязанные к этому empId
-  for (const tg in links) {
-    if (links[tg] === empId) {
-      delete links[tg];
-      changed = true;
-    }
-  }
-  
-  if (changed) {
-    localStorage.setItem(STORAGE_TG_LINKS, JSON.stringify(links));
-    console.log(`[Telegram] Cleared links for employee ${empId}`);
-    
-    // Синхронизировать с Firebase в фоне (не ждём результат)
-    (async () => {
-      try {
-        const { deleteUserLink, getCurrentUid } = await import('./firebase');
-        const uid = getCurrentUid();
-        if (uid) {
-          await deleteUserLink(uid);
-          console.log(`[Telegram] Firebase sync completed for ${uid}`);
-        }
-      } catch (err) {
-        console.warn('[Telegram] Firebase sync not available or failed:', err);
-      }
-    })();
-  }
-}
-
-/** Сгенерировать или получить существующий код для сотрудника */
-export function getOrCreateCodeForEmp(empId: string): string {
-  const codes = loadInviteCodes();
-  // Ищем существующий код
-  for (const [code, id] of Object.entries(codes)) {
-    if (id === empId) return code;
-  }
-  // Создаём новый
-  let newCode = generateInviteCode();
-  while (codes[newCode]) newCode = generateInviteCode(); // избегаем коллизий
-  saveInviteCode(newCode, empId);
-  return newCode;
 }

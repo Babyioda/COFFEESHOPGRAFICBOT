@@ -21,7 +21,7 @@ export const SHIFT_CONFIG: Record<ShiftType, ShiftConfig> = {
     borderColor: 'border-violet-400',
     textColor: 'text-violet-700',
     icon: '🔄',
-    time: '08:00–08:00',
+    time: '09:00–09:00',
   },
   day: {
     label: 'День',
@@ -31,7 +31,7 @@ export const SHIFT_CONFIG: Record<ShiftType, ShiftConfig> = {
     borderColor: 'border-blue-400',
     textColor: 'text-blue-700',
     icon: '☀️',
-    time: '08:00–20:00',
+    time: '09:00–20:00',
   },
   night: {
     label: 'Ночь',
@@ -41,7 +41,7 @@ export const SHIFT_CONFIG: Record<ShiftType, ShiftConfig> = {
     borderColor: 'border-indigo-400',
     textColor: 'text-indigo-700',
     icon: '🌙',
-    time: '20:00–08:00',
+    time: '20:00–09:00',
   },
   off: {
     label: 'Выходной',
@@ -99,7 +99,6 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
     color: '#b45309',
     bgColor: 'bg-amber-50',
     textColor: 'text-amber-800',
-    // Точные названия должностей для этого отдела
     roles: ['менеджер', 'управляющий', 'старший менеджер'],
   },
   bar: {
@@ -108,7 +107,6 @@ export const DEPARTMENT_CONFIG: Record<Department, DepartmentConfig> = {
     color: '#7c3aed',
     bgColor: 'bg-violet-50',
     textColor: 'text-violet-800',
-    // Важно: «бармен» идёт после «барменеджер» в power, здесь точные совпадения
     roles: ['бармен ст.', 'бармен ст', 'старший бармен', 'бармен'],
   },
   hall: {
@@ -154,15 +152,13 @@ export function getDepartment(role: string): Department | null {
   for (const dept of ORDER) {
     const cfg = DEPARTMENT_CONFIG[dept];
     for (const r of cfg.roles) {
-      // Проверяем что в строке должности встречается ровно этот токен
-      // используем регулярку с границами слова (кириллица)
       const escaped = r.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const regex = new RegExp(`(^|[\\s,/])${escaped}($|[\\s,/.])`, 'i');
       if (regex.test(normalized) || normalized === r) return dept;
     }
   }
 
-  // 3. Специальные паттерны через includes (для сокращений вроде "тех.перс")
+  // 3. Специальные паттерны через includes
   if (normalized.startsWith('тех') || normalized.includes('техн') || normalized.includes('уборщ') || normalized.includes('клинер') || normalized.includes('мойщ')) {
     return 'kitchen';
   }
@@ -173,38 +169,38 @@ export function getDepartment(role: string): Department | null {
 export interface Employee {
   id: string;
   name: string;
-  role: string;       // основная должность (из колонки B)
-  roles?: string[];   // может быть несколько должностей в зависимости от дня
+  role: string;
+  roles?: string[];
   color: string;
-  rowIndex: number;   // номер строки в таблице (для отладки)
+  rowIndex: number;
   department?: Department | null;
-  showTelegram?: boolean;  // показывать ли кнопку Telegram на странице сотрудника
-  birthday?: string;       // день рождения в формате MM-DD (без года)
-  tgUsername?: string;     // @username в Telegram
-  customUsername?: string; // вручную введённый @username
+  showTelegram?: boolean;
+  birthday?: string;
+  tgUsername?: string;
+  customUsername?: string;
 }
 
 export interface MultipleShift {
   dept: Department;
   hours: number;
-  role?: string;  // роль для этого отдела (например, "Повар" для kitchen)
+  role?: string;
 }
 
 export interface ShiftWithTime {
-  role: string;        // должность "Бармен"
-  dept: Department;    // отдел "bar"  
-  startTime: string;   // "12:00"
-  endTime: string;     // "15:00"
+  role: string;
+  dept: Department;
+  startTime: string;
+  endTime: string;
 }
 
 export interface ShiftEntry {
   employeeId: string;
-  date: string;       // ISO yyyy-mm-dd
+  date: string;
   shift: ShiftType;
-  role?: string;      // должность на конкретный день (если отличается от основной)
-  hours?: number;     // необязательное поле — количество часов, если в таблице указано число
-  multipleShifts?: MultipleShift[];  // несколько смен в день с часами (например, 3ч бар + 2ч кухня)
-  shiftsWithTimes?: ShiftWithTime[];  // несколько смен с временем (например, Бармен 12-15, Повар 15-17)
+  role?: string;
+  hours?: number;
+  multipleShifts?: MultipleShift[];
+  shiftsWithTimes?: ShiftWithTime[];
 }
 
 export interface ScheduleData {

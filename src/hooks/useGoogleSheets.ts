@@ -1,3 +1,8 @@
+/**
+ * 🔗 useGoogleSheets - загрузка данных из Google Sheets
+ * Парсинг CSV, получение данных сотрудников и расписания
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import { ScheduleData, ShiftEntry, Employee, ShiftType, getDepartment } from '../types/schedule';
 
@@ -14,7 +19,6 @@ const HEADER_WORDS = new Set([
   'дата', 'день', 'число', 'месяц', 'январь', 'февраль', 'март', 'апрель',
   'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
   'менеджеры', 'бармены', 'официанты', 'повара', 'кухня',
-  'вылеты', 'пассажиров', 'рейсов',
 ]);
 
 function isEmployeeName(cell: string): boolean {
@@ -73,8 +77,6 @@ export function parseShiftValue(raw: string): {
   if (vLower === 'д' || vLower === 'd' || vLower === 'день' || vLower === 'дн' || vLower === 'дневная') return { type: 'day' };
   if (vLower === 'н' || vLower === 'n' || vLower === 'ночь' || vLower === 'ноч' || vLower === 'ночная') return { type: 'night' };
   
-  // Сначала проверяем формат с временем (например "Бармен 12-15 Повар 15-17")
-  // Паттерн: "РольНазвание ЧЧ-ЧЧ РольНазвание ЧЧ-ЧЧ"
   const timeRangePattern = /([А-Яа-яЁё]+)\s+(\d{1,2})-(\d{1,2})/g;
   const timeMatches = Array.from(v.matchAll(timeRangePattern));
   
@@ -88,7 +90,6 @@ export function parseShiftValue(raw: string): {
       const startTime = `${String(startHour).padStart(2, '0')}:00`;
       const endTime = `${String(endHour).padStart(2, '0')}:00`;
       
-      // Определяем отдел по ролевому названию
       const roleLower = role.toLowerCase();
       let dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager' = 'kitchen';
       
@@ -109,8 +110,6 @@ export function parseShiftValue(raw: string): {
     }
   }
   
-  // Поддержка нескольких смен за день (например, "3Б 2К")
-  // Поддерживаем сокращения: Б=бар, К=кухня, З=зал, П=power/менеджер
   if (vLower.match(/^\d+[БбКкЗзПп]/)) {
     const multipleShifts: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number }> = [];
     const parts = vLower.split(/\s+/);
@@ -137,7 +136,6 @@ export function parseShiftValue(raw: string): {
     }
   }
   
-  // Числа — это НЕ смена, просто часы. Блокируем отображение смены.
   const num = parseFloat(vLower);
   if (!isNaN(num) && num > 0) return { type: 'off', hours: num };
   return { type: 'off' };
@@ -163,7 +161,6 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-// Принимает либо CSV строку, либо уже готовый массив rows (от Apps Script)
 export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
   let rows: string[][];
 
@@ -178,7 +175,6 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     return { employees: [], shifts: [], lastSync: new Date().toISOString() };
   }
 
-  // === Определяем месяц и год из первой строки ===
   const monthNamesRu: Record<string, number> = {
     'январ': 1, 'феврал': 2, 'март': 3, 'апрел': 4,
     'мая': 5, 'май': 5, 'июн': 6, 'июл': 7, 'август': 8,
@@ -202,10 +198,8 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     }
   }
 
-  // === Находим строку с числами дат (1..31) ===
-  // Таблица может иметь 2 или 3 служебных колонки (Имя, Должность, [Стаж])
   const dateMap: Record<number, string> = {};
-  let dataStartCol = 2; // минимум колонка C
+  let dataStartCol = 2;
 
   for (let ri = 0; ri < Math.min(rows.length, 10); ri++) {
     const row = rows[ri];
@@ -216,7 +210,6 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     for (let ci = 2; ci < row.length; ci++) {
       const cell = row[ci].replace(/['"]/g, '').trim();
       const num = parseInt(cell, 10);
-      // Строго число от 1 до 31
       if (!isNaN(num) && num >= 1 && num <= 31 && String(num) === cell) {
         countNumbers++;
         if (firstNumCol === -1) firstNumCol = ci;
@@ -233,14 +226,10 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     }
   }
 
-  // Если не нашли строку с датами — возвращаем пустой результат
   if (Object.keys(dateMap).length === 0) {
     return { employees: [], shifts: [], lastSync: new Date().toISOString(), sheetName: sheetTitle, month: detectedMonth, year: detectedYear };
   }
 
-  
-
-  // === Парсим сотрудников ===
   const employeeMap = new Map<string, Employee>();
   const shifts: ShiftEntry[] = [];
   let colorCounter = 0;
@@ -252,7 +241,6 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
     const nameCell = (row[0] || '').trim();
     const roleCell = (row[1] || '').trim();
 
-    // Пропускаем строки-разделители и заголовки
     if (!isRoleCell(roleCell)) continue;
     if (!isEmployeeName(nameCell)) continue;
 
@@ -272,7 +260,6 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       };
       employeeMap.set(nameLower, emp);
     } else {
-      // Сотрудник с несколькими должностями
       if (roleCell && !emp.roles?.includes(roleCell)) {
         emp.roles = [...(emp.roles || []), roleCell];
       }
@@ -284,7 +271,6 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       }
     }
 
-    // Читаем смены по колонкам дат
     for (const [ciStr, isoDate] of Object.entries(dateMap)) {
       const ci = parseInt(ciStr);
       const cell = (row[ci] || '').trim();
@@ -294,25 +280,17 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
       const multipleShifts = parsed.multipleShifts;
       const shiftsWithTimes = parsed.shiftsWithTimes;
 
-      
-
       const existingIdx = shifts.findIndex(s => s.employeeId === emp!.id && s.date === isoDate);
 
-      // Числовые значения в ячейке считаем отработанными часами: сохраняем в поле hours,
-      // но не переводим автоматически в смену 'day'. Если парсер вернул реальную смену (не 'off'),
-      // она сохраняется как обычно.
       if (existingIdx !== -1) {
         const existing = shifts[existingIdx];
         const deptForRow = getDepartment(roleCell) ?? emp.department ?? 'kitchen';
 
         if (shiftsWithTimes && shiftsWithTimes.length > 0) {
-          // Обновляем со смен с временем
           shifts[existingIdx] = { ...existing, shiftsWithTimes };
         } else if (multipleShifts && multipleShifts.length > 0) {
-          // Обновляем с несколькими смен и общим количеством часов
           shifts[existingIdx] = { ...existing, hours, multipleShifts };
         } else if (hours && hours > 0) {
-          // Если уже был найден другой числовой часовойчёт, нужно сложить по департаментам.
           const existingDept = getDepartment(existing.role ?? emp.role) ?? deptForRow;
           const existingShifts: Array<{ dept: 'bar' | 'kitchen' | 'hall' | 'power' | 'bar_manager'; hours: number; role?: string }> = [];
 
@@ -331,7 +309,6 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
             multipleShifts: existingShifts,
           };
         } else if (shift !== 'off' && existing.shift === 'off') {
-          // Новая информация — рабочая смена, прежняя была off
           shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
         }
       } else {
@@ -362,10 +339,9 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
   };
 }
 
-// ==================== ДЕМО-ДАННЫЕ ====================
 export function useDemoData(): ScheduleData {
-  const year = 2025;
-  const month = 2;
+  const year = new Date().getFullYear();
+  const month = new Date().getMonth() + 1;
   const daysInMonth = 28;
 
   const employees: Employee[] = [
@@ -373,44 +349,14 @@ export function useDemoData(): ScheduleData {
     { id: 'e2', name: 'Лисицына Вера', role: 'Барменеджер', color: '#d97706', rowIndex: 7, department: 'power' },
     { id: 'e3', name: 'Соколов Денис', role: 'Бармен ст.', color: '#7c3aed', rowIndex: 12, department: 'bar' },
     { id: 'e4', name: 'Морозова Алина', role: 'Бармен', color: '#8b5cf6', rowIndex: 13, department: 'bar' },
-    { id: 'e5', name: 'Беляев Кирилл', role: 'Бармен', color: '#a855f7', rowIndex: 14, department: 'bar' },
-    { id: 'e6', name: 'Новикова Дарья', role: 'Бармен', color: '#6366f1', rowIndex: 15, department: 'bar' },
-    { id: 'e7', name: 'Иванова Карина', role: 'Официант ст.', color: '#0369a1', rowIndex: 30, department: 'hall' },
-    { id: 'e8', name: 'Петров Максим', role: 'Официант', color: '#0284c7', rowIndex: 31, department: 'hall' },
-    { id: 'e9', name: 'Смирнова Юля', role: 'Официант', color: '#0ea5e9', rowIndex: 32, department: 'hall' },
-    { id: 'e10', name: 'Козлов Андрей', role: 'Официант', color: '#38bdf8', rowIndex: 33, department: 'hall' },
-    { id: 'e11', name: 'Фёдорова Ника', role: 'Официант', color: '#06b6d4', rowIndex: 34, department: 'hall' },
-    { id: 'e12', name: 'Волков Стас', role: 'Официант', color: '#0891b2', rowIndex: 35, department: 'hall' },
-    { id: 'e13', name: 'Орлов Виктор', role: 'Повар', color: '#15803d', rowIndex: 44, department: 'kitchen' },
-    { id: 'e14', name: 'Кузнецова Оля', role: 'Повар', color: '#16a34a', rowIndex: 45, department: 'kitchen' },
-    { id: 'e15', name: 'Тихонов Рома', role: 'Помощник повара', color: '#22c55e', rowIndex: 46, department: 'kitchen' },
   ];
-
-  const dailyCycle = (offset: number, day: number): ShiftType => {
-    const pos = (day - 1 + offset) % 4;
-    return pos === 0 ? 'daily' : 'off';
-  };
-  const nightCycle = (offset: number, day: number): ShiftType => {
-    const pos = (day - 1 + offset) % 3;
-    return pos === 1 ? 'night' : 'off';
-  };
-  const dayCycle = (_offset: number, day: number): ShiftType => {
-    const dow = new Date(year, month - 1, day).getDay();
-    return (dow === 0 || dow === 6) ? 'off' : 'day';
-  };
 
   const shifts: ShiftEntry[] = [];
   employees.forEach((emp, idx) => {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      let shift: ShiftType;
-      const dept = emp.department;
-      if (dept === 'power') shift = dayCycle(idx, d);
-      else if (dept === 'bar') shift = nightCycle(idx % 3, d);
-      else if (dept === 'hall') shift = dailyCycle(idx % 4, d);
-      else shift = dayCycle(idx, d);
-      if (emp.id === 'e5' && d >= 10 && d <= 16) shift = 'vacation';
-      if (emp.id === 'e10' && d === 14) shift = 'sick';
+      let shift: ShiftType = (d % 3 === 0) ? 'day' : 'off';
+      if (emp.id === 'e1' && d % 4 === 0) shift = 'daily';
       shifts.push({ employeeId: emp.id, date: dateStr, shift, role: emp.role });
     }
   });
@@ -418,102 +364,15 @@ export function useDemoData(): ScheduleData {
   return { employees, shifts, lastSync: new Date().toISOString(), sheetName: 'График работы (демо)', month, year };
 }
 
-// ==================== SHEETS API ====================
-
-export async function fetchSheetListWithApiKey(
-  sheetId: string,
-  apiKey: string,
-): Promise<{ gid: string; title: string; month?: number; year?: number }[]> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties&key=${apiKey}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message ?? `HTTP ${res.status}`);
-  }
-  const json = await res.json();
-  const sheets: { properties: { sheetId: number; title: string } }[] = json.sheets ?? [];
-  return sheets.map(s => {
-    const gid   = String(s.properties.sheetId);
-    const title = s.properties.title ?? '';
-    const parsed = parseSheetTitle(title);
-    return { gid, title, month: parsed?.month, year: parsed?.year };
-  });
-}
-
-const MONTH_NAMES_RU = [
-  'январь','февраль','март','апрель','май','июнь',
-  'июль','август','сентябрь','октябрь','ноябрь','декабрь',
-];
-const MONTH_NAMES_RU_GEN = [
-  'января','февраля','марта','апреля','мая','июня',
-  'июля','августа','сентября','октября','ноября','декабря',
-];
-
-function parseSheetTitle(title: string): { month: number; year: number } | null {
-  const lower = title.toLowerCase().trim();
-  const yearMatch = lower.match(/20(\d{2})/);
-  const year = yearMatch ? parseInt('20' + yearMatch[1]) : null;
-  if (!year) return null;
-
-  for (let i = 0; i < MONTH_NAMES_RU.length; i++) {
-    if (lower.includes(MONTH_NAMES_RU[i]) || lower.includes(MONTH_NAMES_RU_GEN[i])) {
-      return { month: i + 1, year };
-    }
-  }
-  const numMatch = lower.match(/(\d{1,2})[.\-\/]20\d{2}/) || lower.match(/20\d{2}[.\-\/](\d{1,2})/);
-  if (numMatch) {
-    const m = parseInt(numMatch[1]);
-    if (m >= 1 && m <= 12) return { month: m, year };
-  }
-  return null;
-}
-
-export async function fetchSheetList(sheetId: string): Promise<{ gid: string; title: string; month?: number; year?: number }[]> {
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/feeds/worksheets/default/public/values?alt=json`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Не удалось получить листы');
-    const json = await res.json();
-    const entries = json?.feed?.entry ?? [];
-    return entries.map((e: Record<string, unknown>) => {
-      const title = (e['title'] as Record<string, unknown>)?.['$t'] as string ?? '';
-      const links = (e['link'] as Record<string, unknown>[]) ?? [];
-      let gid = '0';
-      for (const link of links) {
-        const href = link['href'] as string ?? '';
-        const gidMatch = href.match(/gid=(\d+)/);
-        if (gidMatch) { gid = gidMatch[1]; break; }
-      }
-      const parsed = parseSheetTitle(title);
-      return { gid, title, month: parsed?.month, year: parsed?.year };
-    });
-  } catch {
-    return [];
-  }
-}
-
-export async function findSheetGidByMonth(sheetId: string, month: number, year: number): Promise<string | null> {
-  const sheets = await fetchSheetList(sheetId);
-  if (sheets.length === 0) return null;
-  const found = sheets.find(s => s.month === month && s.year === year);
-  return found ? found.gid : null;
-}
-
-// ==================== EMPLOYEE DATA (Birthday, Telegram) ====================
-
 export interface EmployeeData {
+  id?: string;
   name: string;
   tgUsername: string;
-  birthday: string; // мм-дд
+  birthday: string;
   showTelegram?: boolean;
   customUsername?: string;
 }
 
-/**
- * Загружает данные сотрудников (Birthday, Telegram) из отдельного Apps Script
- * @param scriptUrl - URL Apps Script, который возвращает список сотрудников
- * @returns Массив данных сотрудников или пустой массив в случае ошибки
- */
 export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData[]> {
   if (!scriptUrl) {
     console.warn('[useGoogleSheets] Employee data script URL не задан');
@@ -521,7 +380,6 @@ export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData
   }
 
   try {
-    // Добавляем timestamp для обхода кэширования
     const cacheBustUrl = scriptUrl + (scriptUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
     console.log('[useGoogleSheets] Загружаем данные сотрудников из:', cacheBustUrl);
     const res = await fetch(cacheBustUrl);
@@ -534,7 +392,6 @@ export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData
     }
 
     console.log('[useGoogleSheets] Загружено сотрудников:', json.employees.length);
-    console.log('[useGoogleSheets] 🎂 Sample employee data:', json.employees.slice(0, 3).map(e => ({ name: e.name, birthday: e.birthday, tgUsername: e.tgUsername })));
     return json.employees;
   } catch (err) {
     console.error('[useGoogleSheets] Ошибка загрузки данных сотрудников:', err);
@@ -542,7 +399,44 @@ export async function fetchEmployeeData(scriptUrl: string): Promise<EmployeeData
   }
 }
 
-// ==================== ХУК ====================
+export async function fetchSheetList(sheetId: string): Promise<{ gid: string; title: string; month?: number; year?: number }[]> {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/feeds/worksheets/default/public/values?alt=json`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Не удалось получить листы');
+    const json = await res.json();
+    const entries = json?.feed?.entry ?? [];
+    return entries.map((e: any) => {
+      const title = e['title']?.['$t'] ?? '';
+      const links = e['link'] ?? [];
+      let gid = '0';
+      for (const link of links) {
+        const href = link['href'] ?? '';
+        const gidMatch = href.match(/gid=(\d+)/);
+        if (gidMatch) { gid = gidMatch[1]; break; }
+      }
+      return { gid, title, month: parseInt(title.split(' ')[0]), year: parseInt(title.split(' ')[1]) };
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchSheetListWithApiKey(
+  sheetId: string,
+  apiKey: string,
+): Promise<{ gid: string; title: string; month?: number; year?: number }[]> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties&key=${apiKey}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  const sheets = json.sheets ?? [];
+  return sheets.map((s: any) => ({
+    gid: String(s.properties.sheetId),
+    title: s.properties.title ?? '',
+  }));
+}
+
 interface UseGoogleSheetsConfig {
   sheetId: string;
   sheetGid?: string;
@@ -561,7 +455,7 @@ export function useGoogleSheets({ sheetId, sheetGid = '0', refreshInterval = 600
     try {
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${sheetGid}`;
       const res = await fetch(csvUrl);
-      if (!res.ok) throw new Error(`HTTP ${res.status}: Не удалось загрузить таблицу`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       const parsed = parseGoogleSheetsCSV(text);
       setData(parsed);
