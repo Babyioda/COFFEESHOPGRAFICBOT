@@ -11,9 +11,9 @@ const DAY_LABELS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'
 const MONTHS_RU_FULL = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 const SHIFT_TIMES: Record<ShiftType, { start: string; end: string } | null> = {
-  daily: { start: '09:00', end: '09:00' },
-  day:   { start: '09:00', end: '20:00' },
-  night: { start: '20:00', end: '09:00' },
+  daily: { start: '08:00', end: '08:00' },
+  day:   { start: '08:00', end: '20:00' },
+  night: { start: '20:00', end: '08:00' },
   off: null, vacation: null, sick: null,
 };
 

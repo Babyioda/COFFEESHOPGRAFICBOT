@@ -20,9 +20,9 @@ const DAYS_FULL = ['воскресенье','понедельник','вторн
 const DEPT_ORDER: Department[] = ['bar_manager', 'power', 'bar', 'hall', 'kitchen'];
 
 const SHIFT_TIMES: Record<ShiftType, { start: string; end: string; short: string } | null> = {
-  daily:    { start: '09:00', end: '09:00', short: '09-09' },
-  day:      { start: '09:00', end: '20:00', short: '09-20' },
-  night:    { start: '20:00', end: '09:00', short: '20-09' },
+  daily:    { start: '08:00', end: '08:00', short: '08-08' },
+  day:      { start: '08:00', end: '20:00', short: '08-20' },
+  night:    { start: '20:00', end: '08:00', short: '20-08' },
   off:      null,
   vacation: null,
   sick:     null,
