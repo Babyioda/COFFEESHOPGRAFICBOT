@@ -2,3 +2,10 @@ node_modules
 ex.components/
 node_modules
 node_modules
+_dev/
+legacy/
+dist
+.env
+.env.local
+.DS_Store
+
