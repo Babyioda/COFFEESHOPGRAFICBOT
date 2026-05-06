@@ -297,7 +297,9 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                 const displayEnd = customEdit?.customEnd || times?.end;
 
                 // Для рабочих смен используем динамический цвет отдела вместо фиксированного класса
-                const isWorking = shift === 'daily' || shift === 'day' || shift === 'night';
+                // Считаем это рабочая смена если: есть типизированная смена ИЛИ есть часы/multipleShifts
+                const isWorking = (shift === 'daily' || shift === 'day' || shift === 'night') || 
+                                  (entry && (entry.hours || entry.multipleShifts));
 
                 return (
                   <div
@@ -329,6 +331,31 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
                         >
                           {displayEnd}
                         </div>
+                      </div>
+                    )}
+                    {isWorking && entry && (entry.hours || entry.multipleShifts) && !displayStart && (
+                      <div className="flex flex-col items-center gap-[2px] mt-0.5 w-full px-0.5">
+                        {entry.hours && (
+                          <div
+                            className="w-full text-center text-[8px] font-bold leading-none px-0.5 py-[2px] rounded-[3px]"
+                            style={{ backgroundColor: dayColor + '30', color: dayColor }}
+                          >
+                            {entry.hours}ч
+                          </div>
+                        )}
+                        {entry.multipleShifts && entry.multipleShifts.length > 0 && (
+                          <div className="flex flex-col gap-[1px] w-full">
+                            {entry.multipleShifts.map((ms, idx) => (
+                              <div
+                                key={idx}
+                                className="w-full text-center text-[7px] font-bold leading-none px-0.5 py-[1px] rounded-[2px]"
+                                style={{ backgroundColor: dayColor + '30', color: dayColor }}
+                              >
+                                {ms.hours}ч
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                     {shift === 'vacation' && <span className="text-[9px] font-bold leading-none mt-0.5">ОТ</span>}

@@ -79,7 +79,16 @@ const EmployeeCalendar: React.FC<EmployeeCalendarProps> = ({
 
   const getShift = (day: number): ShiftType => {
     const dateStr = formatDate(year, month, day);
-    return data.shifts.find(s => s.employeeId === employee.id && s.date === dateStr)?.shift ?? 'off';
+    const entry = data.shifts.find(s => s.employeeId === employee.id && s.date === dateStr);
+    if (!entry) return 'off';
+    
+    // Если есть явная смена - используем её
+    if (entry.shift && entry.shift !== 'off') return entry.shift;
+    
+    // Если есть часы/multipleShifts - считаем это рабочая смена (обозначаем как 'day' для таймлайна)
+    if (entry.hours || entry.multipleShifts) return 'day';
+    
+    return 'off';
   };
 
   // Статистика
@@ -195,6 +204,7 @@ const EmployeeCalendar: React.FC<EmployeeCalendarProps> = ({
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
                 const dateStr = formatDate(year, month, day);
                 const shift = getShift(day);
+                const entry = data.shifts.find(s => s.employeeId === employee.id && s.date === dateStr);
                 const isTodayCell = dateStr === todayStr;
                 const dow = new Date(year, month - 1, day).getDay();
                 const isWeekend = dow === 0 || dow === 6;
@@ -213,9 +223,14 @@ const EmployeeCalendar: React.FC<EmployeeCalendarProps> = ({
                         ? isDark ? 'text-slate-600' : 'text-gray-300'
                         : ''
                     }`}>{day}</span>
-                    {shift !== 'off' && (
+                    {shift !== 'off' && entry?.shift && entry.shift !== 'off' && (
                       <span className="text-[9px] leading-none mt-0.5 font-extrabold">
                         {SHIFT_CONFIG[shift].shortLabel}
+                      </span>
+                    )}
+                    {shift === 'day' && entry && (entry.hours || entry.multipleShifts) && (
+                      <span className="text-[8px] leading-none mt-0.5 font-extrabold">
+                        {entry.hours}ч
                       </span>
                     )}
                   </div>

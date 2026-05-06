@@ -332,7 +332,26 @@ export function parseGoogleSheetsCSV(input: string | string[][]): ScheduleData {
           };
         } else if (shift !== 'off' && existing.shift === 'off') {
           // Новая информация — рабочая смена, прежняя была off
-          shifts[existingIdx] = { employeeId: emp!.id, date: isoDate, shift, role: roleCell || undefined };
+          // Объединяем роли если это разные роли (например "Помощник повара" → "Повар")
+          const updatedRole = roleCell || undefined;
+          const prevRole = existing.role;
+          let combinedRole = prevRole;
+          
+          if (updatedRole && prevRole && updatedRole !== prevRole) {
+            // Если роли разные - сохраняем обе через слеш
+            combinedRole = `${prevRole} / ${updatedRole}`;
+          } else if (updatedRole) {
+            combinedRole = updatedRole;
+          }
+          
+          shifts[existingIdx] = { ...existing, employeeId: emp!.id, date: isoDate, shift, role: combinedRole };
+        } else if (shift !== 'off' && existing.shift !== 'off' && existing.role !== roleCell && roleCell) {
+          // Если обе смены не выходные и роли разные - сохраняем обе роли
+          const prevRole = existing.role || emp.role;
+          const newRole = roleCell;
+          if (prevRole !== newRole) {
+            shifts[existingIdx] = { ...existing, role: `${prevRole} / ${newRole}` };
+          }
         }
       } else {
         const deptForRow = getDepartment(roleCell) ?? emp.department ?? 'kitchen';
